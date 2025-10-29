@@ -1,0 +1,20 @@
+# .NET
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+.vs/
+
+# Secrets & Certs
+appsettings.Development.json
+*.pfx
+*.key
+!certs/.gitkeep
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
