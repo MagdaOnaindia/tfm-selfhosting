@@ -1,0 +1,9 @@
+syntax = "proto3";
+option csharp_namespace = "TFM.Contracts";
+package tunnel;
+service TunnelService {
+  rpc EstablishTunnel(stream TunnelMessage) returns (stream TunnelMessage);
+}
+message TunnelMessage {
+  string message_id = 1;
+}
