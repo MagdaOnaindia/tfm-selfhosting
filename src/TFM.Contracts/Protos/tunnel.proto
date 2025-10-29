@@ -1,9 +1,62 @@
 syntax = "proto3";
 option csharp_namespace = "TFM.Contracts";
 package tunnel;
+
+// ============================================
+// SERVICE
+// ============================================
 service TunnelService {
-  rpc EstablishTunnel(stream TunnelMessage) returns (stream TunnelMessage);
+	// Túnel bidireccional
+	rpc EstablishTunnel(stream TunnelMessage) returns (stream TunnelMessage);
+	// Health check
+	rpc Ping(PingRequest) returns (PingResponse);
 }
+// ============================================
+// MESSAGES
+// ============================================
 message TunnelMessage {
-  string message_id = 1;
+	string message_id = 1;
+	MessageType type = 2;
+	int64 timestamp = 3;
+	oneof payload {
+		HttpRequest http_request = 4;
+		HttpResponse http_response = 5;
+		ControlMessage control = 6;
+	}
+}
+
+enum MessageType {
+	HTTP_REQUEST = 0;
+	HTTP_RESPONSE = 1;
+	CONTROL = 2;
+	HEARTBEAT = 3;
+}
+
+message HttpRequest {
+	string request_id = 1;
+	string method = 2;
+	string path = 3;
+	string host = 4;
+	map<string, string> headers = 5;
+	bytes body = 6;
+	string client_ip = 7;
+}
+
+message HttpResponse {
+	string request_id = 1;
+	int32 status_code = 2;
+	map<string, string> headers = 3;
+	bytes body = 4;
+	int64 processing_time_ms = 5;
+}
+message ControlMessage {
+	string command = 1;
+	string data = 2;
+}
+message PingRequest {
+	int64 timestamp = 1;
+}
+message PingResponse {
+	int64 timestamp = 1;
+	string server_version = 2;
 }
