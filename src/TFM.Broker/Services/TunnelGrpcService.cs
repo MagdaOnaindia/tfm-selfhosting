@@ -1,7 +1,7 @@
 ﻿using Grpc.Core;
 using TFM.Broker.Interfaces;
 using TFM.Contracts;
-namespace TFM.Broker.Services;
+
 public class TunnelGrpcService : TunnelService.TunnelServiceBase
 {
     private readonly ITunnelManager _tunnelManager;
