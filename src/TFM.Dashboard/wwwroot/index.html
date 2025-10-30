@@ -1,0 +1,410 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SelfHosting Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+
+            .header h1 {
+                color: #667eea;
+                font-size: 32px;
+                margin-bottom: 10px;
+            }
+
+            .header p {
+                color: #666;
+                font-size: 14px;
+            }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+
+            .stat-card .label {
+                color: #999;
+                font-size: 14px;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                margin-bottom: 8px;
+            }
+
+            .stat-card .value {
+                color: #333;
+                font-size: 36px;
+                font-weight: bold;
+            }
+
+            .stat-card.success .value {
+                color: #10b981;
+            }
+
+            .stat-card.danger .value {
+                color: #ef4444;
+            }
+
+        .apps-section {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+
+            .apps-section h2 {
+                color: #333;
+                margin-bottom: 20px;
+                font-size: 24px;
+            }
+
+        .app-card {
+            border: 2px solid #f0f0f0;
+            padding: 20px;
+            margin-bottom: 16px;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+
+            .app-card:hover {
+                border-color: #667eea;
+                box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
+            }
+
+        .app-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .app-name {
+            font-size: 20px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .app-status {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+            .app-status.running {
+                background: #d1fae5;
+                color: #065f46;
+            }
+
+            .app-status.stopped {
+                background: #fee2e2;
+                color: #991b1b;
+            }
+
+        .app-info {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .app-domain {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+            .app-domain:hover {
+                text-decoration: underline;
+            }
+
+        .app-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+            .btn-primary:hover {
+                background: #5568d3;
+            }
+
+        .btn-warning {
+            background: #f59e0b;
+            color: white;
+        }
+
+            .btn-warning:hover {
+                background: #d97706;
+            }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+            .btn-danger:hover {
+                background: #dc2626;
+            }
+
+        .btn-secondary {
+            background: #6b7280;
+            color: white;
+        }
+
+            .btn-secondary:hover {
+                background: #4b5563;
+            }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <div class="header">
+                <h1>􀀀 SelfHosting Dashboard</h1>
+                <p>Gestiona tus aplicaciones locales expuestas a Internet</p>
+            </div>
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="label">Total Apps</div>
+                    <div class="value">{{ apps.length }}</div>
+                </div>
+                <div class="stat-card success">
+                    <div class="label">Running</div>
+                    <div class="value">{{ stats.runningContainers || 0 }}</div>
+                </div>
+                <div class="stat-card danger">
+                    <div class="label">Stopped</div>
+                    <div class="value">{{ stats.stoppedContainers || 0 }}</div>
+                </div>
+            </div>
+            <div class="apps-section">
+                <h2>Aplicaciones</h2>
+                <div v-if="loading" class="loading">
+                    Cargando aplicaciones...
+                </div>
+                <div v-else-if="apps.length === 0" class="empty-state">
+                    <div class="empty-state-icon">􀀀</div>
+                    <p>No hay aplicaciones desplegadas</p>
+                    <p style="margin-top: 8px; font-size: 14px;">
+                        Despliega aplicaciones usando docker-compose con las labels apropiadas
+                    </p>
+                </div>
+                <div v-else>
+                    <div v-for="app in apps" :key="app.id" class="app-card">
+                        <div class="app-header">
+                            <div class="app-name">{{ app.name }}</div>
+                            <div class="app-status" :class="app.status">
+                                {{ app.status }}
+                            </div>
+                        </div>
+                        <div class="app-info">
+                            Tipo: {{ app.type }} | Imagen: {{ app.image }}
+                        </div>
+                        <div class="app-info" v-if="app.domain">
+                            􀀀 <a :href="'https://' + app.domain" target="_blank" class="app-domain">
+                                {{ app.domain }}
+                            </a>
+                        </div>
+                        <div class="app-info">
+                            Puertos:
+                            <span v-for="(port, index) in app.ports" :key="index">
+                                {{ port.publicPort }}:{{ port.privatePort }}{{ index < app.ports.length - 1 ? ', ' : '' }}
+                            </span>
+                        </div>
+                        <div class="app-actions">
+                            <button v-if="app.status === 'running'"
+                                    @click="stopApp(app)"
+                                    class="btn btn-warning">
+                                􀀀 Detener
+                            </button>
+                            <button v-if="app.status !== 'running'"
+                                    @click="startApp(app)"
+                                    class="btn btn-primary">
+                                ▶ Iniciar
+                            </button>
+                            <button @click="restartApp(app)" class="btn btn-secondary">
+                                􀀀 Reiniciar
+                            </button>
+                            <button @click="viewLogs(app)" class="btn btn-secondary">
+                                􀀀 Logs
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        const { createApp } = Vue;
+        createApp({
+            data() {
+                return {
+                    apps: [],
+                    stats: {},
+                    loading: true
+                };
+            },
+            methods: {
+                async loadApps() {
+                    this.loading = true;
+                    try {
+                        const response = await axios.get('/api/apps');
+                        this.apps = response.data;
+                    } catch (error) {
+                        console.error('Error loading apps:', error);
+                        alert('Error al cargar aplicaciones');
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                async loadStats() {
+                    try {
+                        const response = await axios.get('/api/apps/stats');
+                        this.stats = response.data;
+                    } catch (error) {
+                        console.error('Error loading stats:', error);
+                    }
+                },
+                async startApp(app) {
+                    try {
+                        await axios.post(`/api/apps/${app.id}/start`);
+                        alert(`􀀀 ${app.name} iniciado`);
+                        await this.loadApps();
+                        await this.loadStats();
+                    } catch (error) {
+                        alert(`􀀀 Error: ${error.response?.data?.error || error.message}`);
+                    }
+                },
+                async stopApp(app) {
+                    if (!confirm(`¿Detener ${app.name}?`)) return;
+                    try {
+                        await axios.post(`/api/apps/${app.id}/stop`);
+                        alert(`􀀀 ${app.name} detenido`);
+                        await this.loadApps();
+                        await this.loadStats();
+                    } catch (error) {
+                        alert(`􀀀 Error: ${error.response?.data?.error || error.message}`);
+                    }
+                },
+                async restartApp(app) {
+                    try {
+                        await axios.post(`/api/apps/${app.id}/restart`);
+                        alert(`􀀀 ${app.name} reiniciado`);
+                        await this.loadApps();
+                    } catch (error) {
+                        alert(`􀀀 Error: ${error.response?.data?.error || error.message}`);
+                    }
+                },
+                async viewLogs(app) {
+                    try {
+                        const response = await axios.get(`/api/apps/${app.id}/logs?tail=50`);
+                        const logsWindow = window.open('', `Logs - ${app.name}`, 'width=800,height=600');
+                        logsWindow.document.write(`
+                            <html>
+                            <head>
+                            <title>Logs - ${app.name}</title>
+                            <style>
+                            body {
+                            background: #1e1e1e;
+                            color: #d4d4d4;
+                            font-family: 'Courier New', monospace;
+                            font-size: 12px;
+                            padding: 20px;
+                            }
+                            pre {
+                            white-space: pre-wrap;
+                            word-wrap: break-word;
+                            }
+                            </style>
+                            </head>
+                            <body>
+                            <h2 style="color: #4fc3f7;">Logs - ${app.name}</h2>
+                            <pre>${response.data.logs}</pre>
+                            </body>
+                            </html>
+                            `);
+                    } catch (error) {
+                        alert(`􀀀 Error: ${error.response?.data?.error || error.message}`);
+                    }
+                }
+            },
+            async mounted() {
+                await this.loadApps();
+                await this.loadStats();
+                // Auto-refresh cada 10 segundos
+                setInterval(async () => {
+                    await this.loadApps();
+                    await this.loadStats();
+                }, 10000);
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
