@@ -1,0 +1,63 @@
+version: '3.8'
+services:
+nextcloud-db:
+image: postgres:14-alpine
+container_name: nextcloud_db
+restart: unless-stopped
+volumes:
+- nextcloud_db_data:/var/lib/postgresql/data
+environment:
+- POSTGRES_DB=nextcloud
+- POSTGRES_USER=nextcloud
+- POSTGRES_PASSWORD=changeme_secure_password
+networks:
+- nextcloud_internal
+nextcloud-redis:
+image: redis:alpine
+container_name: nextcloud_redis
+restart: unless-stopped
+networks:
+- nextcloud_internal
+nextcloud-app:
+image: nextcloud:latest
+container_name: nextcloud_app
+restart: unless-stopped
+volumes:
+- nextcloud_data:/var/www/html
+environment:
+- POSTGRES_HOST=nextcloud-db
+- POSTGRES_DB=nextcloud
+- POSTGRES_USER=nextcloud
+- POSTGRES_PASSWORD=changeme_secure_password
+- REDIS_HOST=nextcloud-redis
+- NEXTCLOUD_ADMIN_USER=admin
+- NEXTCLOUD_ADMIN_PASSWORD=changeme_admin_password
+- NEXTCLOUD_TRUSTED_DOMAINS=cloud.ejemplo.com
+- TRUSTED_PROXIES=172.16.0.0/12
+- OVERWRITEPROTOCOL=https
+- OVERWRITEHOST=cloud.ejemplo.com
+depends_on:
+- nextcloud-db
+- nextcloud-redis
+networks:
+- nextcloud_internal
+- selfhosting
+labels:
+# Traefik labels
+- "traefik.enable=true"
+- "traefik.docker.network=selfhosting"
+- "traefik.http.routers.nextcloud.rule=Host(`cloud.ejemplo.com`)"
+- "traefik.http.routers.nextcloud.entrypoints=web"
+- "traefik.http.services.nextcloud.loadbalancer.server.port=80"
+# SelfHosting metadata
+- "selfhosting.app.name=nextcloud"
+- "selfhosting.app.type=nextcloud"
+- "selfhosting.app.domain=cloud.ejemplo.com"
+volumes:
+nextcloud_db_data:
+nextcloud_data:
+networks:
+nextcloud_internal:
+driver: bridge
+selfhosting:
+external: true
