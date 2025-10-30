@@ -1,0 +1,19 @@
+{
+	"Routes": {
+	"cloud.ejemplo.com": {
+		"AgentId": "my-agent",
+		"TargetPort": 80,
+		"Description": "Nextcloud"
+	},
+	"git.ejemplo.com": {
+		"AgentId": "my-agent",
+		"TargetPort": 3000,
+		"Description": "Gitea"
+	},
+	"whoami.ejemplo.com": {
+		"AgentId": "my-agent",
+		"TargetPort": 80,
+		"Description": "Whoami test service"
+		}
+	}
+}
