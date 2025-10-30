@@ -1,0 +1,58 @@
+version: '3.8'
+services:
+# ==========================================
+# CADDY - Reverse Proxy Público
+# ==========================================
+  caddy:
+    image: caddy:2-alpine
+    container_name: selfhosting-caddy
+    restart: unless-stopped
+    ports:
+    - "80:80"
+    - "443:443"
+    - "443:443/udp"
+    volumes:
+    - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    - caddy_data:/data
+    - caddy_config:/config
+    - ./caddy/logs:/var/log/caddy
+    networks:
+    - vps-network
+    depends_on:
+    - broker
+# ==========================================
+# BROKER - Servicio de Túnel
+# ==========================================
+  broker:
+    build:
+      context: ../src/TFM.Broker
+      dockerfile: ../../docker/broker/Dockerfile
+    container_name: tfm-broker
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5000:5000" # HTTP interno
+      - "50051:50051" # gRPC público
+    volumes:
+    - ../certs:/app/certs:ro
+    - ../config:/app/config:ro
+    - ./broker/logs:/app/logs
+    environment:
+    - ASPNETCORE_ENVIRONMENT=Production
+    - ASPNETCORE_URLS=http://+:5000
+    - Routing__ConfigPath=/app/config/domains.json
+    - Certificates__BrokerCertPath=/app/certs/broker.pfx
+    - Certificates__BrokerCertPassword=dev123
+    - Certificates__CaCertPath=/app/certs/ca.crt
+    networks:
+    - vps-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+volumes:
+  caddy_data:
+  caddy_config:
+networks:
+  vps-network:
+    driver: bridge

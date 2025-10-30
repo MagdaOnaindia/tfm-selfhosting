@@ -1,0 +1,42 @@
+{
+email tu-email@ejemplo.com
+# Configuración global
+admin off
+}
+# Dominio principal
+ejemplo.com {
+respond "SelfHosting VPS - System Online" 200
+}
+# Wildcard para todos los subdominios
+*.ejemplo.com {
+# Reverse proxy al broker HTTP
+reverse_proxy localhost:5000 {
+# Headers importantes
+header_up X-Forwarded-Host {host}
+header_up X-Forwarded-For {remote_host}
+header_up X-Forwarded-Proto {scheme}
+header_up X-Real-IP {remote_host}
+# Timeouts
+transport http {
+dial_timeout 10s
+response_header_timeout 30s
+}
+}
+# Logging
+log {
+output file /var/log/caddy/access.log
+format json
+}
+# Headers de seguridad
+header {
+# Seguridad
+Strict-Transport-Security "max-age=31536000; includeSubDomains"
+X-Content-Type-Options "nosniff"
+X-Frame-Options "SAMEORIGIN"
+Referrer-Policy "strict-origin-when-cross-origin"
+# Remover headers que revelan información
+-Server
+-X-Powered-By
+-X-Powered-By
+}
+}
