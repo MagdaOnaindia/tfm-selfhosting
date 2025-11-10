@@ -1,0 +1,280 @@
+﻿@page "/"
+@using MudBlazor
+@using TFM.Dashboard.Models
+@using TFM.Dashboard.Interfaces
+@inject IApplicationService AppService
+@inject IDockerService DockerService
+@inject ILogger<Index> Logger
+
+<PageTitle>Dashboard - SelfHosting</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Dashboard</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else
+{
+    <!-- Estadísticas Generales -->
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard Elevation="2" Class="d-flex flex-column" Style="height: 100%">
+    <MudCardContent Class="flex-grow-1">
+                    <div class="d-flex justify-space-between align-center">
+                        <div>
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Aplicaciones</MudText>
+                            <MudText Typo="Typo.h4">@_applications.Count</MudText>
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.Apps" Color="Color.Primary" Size="Size.Large" />
+                    </div>
+                </MudCardContent>
+                <MudCardActions>
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" Href="/apps">Ver todas</MudButton>
+                </MudCardActions>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+           <MudCard Elevation="2" Class="d-flex flex-column" Style="height: 100%">
+    <MudCardContent Class="flex-grow-1">
+                    <div class="d-flex justify-space-between align-center">
+                        <div>
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Contenedores</MudText>
+                            <MudText Typo="Typo.h4">@_containers.Count</MudText>
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.ViewInAr" Color="Color.Info" Size="Size.Large" />
+                    </div>
+                </MudCardContent>
+                <MudCardActions>
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" Href="/containers">Ver detalles</MudButton>
+                </MudCardActions>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard Elevation="2" Class="d-flex flex-column" Style="height: 100%">
+    <MudCardContent Class="flex-grow-1">
+                    <div class="d-flex justify-space-between align-center">
+                        <div>
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">En Ejecución</MudText>
+                            <MudText Typo="Typo.h4">@_runningContainers</MudText>
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.PlayCircle" Color="Color.Success" Size="Size.Large" />
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+           <MudCard Elevation="2" Class="d-flex flex-column" Style="height: 100%">
+    <MudCardContent Class="flex-grow-1">
+                    <div class="d-flex justify-space-between align-center">
+                        <div>
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Docker</MudText>
+                            <MudText Typo="Typo.h6" Color="@(_dockerAvailable ? Color.Success : Color.Error)">
+                                <MudIcon Icon="@(_dockerAvailable ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Error)" Size="Size.Small" />
+                                @(_dockerAvailable ? "Disponible" : "No disponible")
+                            </MudText>
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.Computer" Color="Color.Primary" Size="Size.Large" />
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+
+    <!-- Aplicaciones Recientes -->
+    <MudPaper Class="pa-4 mb-4" Elevation="2">
+        <div class="d-flex justify-space-between align-center mb-4">
+            <MudText Typo="Typo.h6">📦 Aplicaciones Desplegadas</MudText>
+            <MudButton Variant="Variant.Filled" 
+                       Color="Color.Primary" 
+                       StartIcon="@Icons.Material.Filled.Add"
+                       Href="/deploy">
+                Nueva Aplicación
+            </MudButton>
+        </div>
+
+        @if (!_applications.Any())
+        {
+            <MudAlert Severity="Severity.Info" Class="my-4">
+                <MudText Typo="Typo.body1">
+                    No hay aplicaciones desplegadas todavía.
+                </MudText>
+                <MudButton Variant="Variant.Text" Color="Color.Primary" Href="/deploy" Class="mt-2">
+                    Despliega tu primera aplicación →
+                </MudButton>
+            </MudAlert>
+        }
+        else
+        {
+            <MudTable Items="_applications" Hover="true" Breakpoint="Breakpoint.Sm" Elevation="0">
+                <HeaderContent>
+                    <MudTh>Nombre</MudTh>
+                    <MudTh>Tipo</MudTh>
+                    <MudTh>Dominio</MudTh>
+                    <MudTh>Estado</MudTh>
+                    <MudTh>Última actualización</MudTh>
+                    <MudTh>Acciones</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Nombre">
+                        <MudText><strong>@context.Name</strong></MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Tipo">
+                        <MudChip Size="Size.Small" Variant="Variant.Text" T="string">@context.Type</MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="Dominio">
+                        <MudLink Href="@($"https://{context.Domain}")" Target="_blank">
+                            @context.Domain
+                        </MudLink>
+                    </MudTd>
+                    <MudTd DataLabel="Estado">
+                        <MudChip Size="Size.Small" T="string"
+                                 Color="@GetStatusColor(context.Status)">
+                            @context.Status
+                        </MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="Última actualización">
+                        @(context.LastDeployedAt?.ToString("dd/MM/yyyy HH:mm") ?? "Nunca")
+                    </MudTd>
+                    <MudTd DataLabel="Acciones">
+                        <MudIconButton Icon="@Icons.Material.Filled.Visibility" 
+                                       Size="Size.Small" 
+                                       Color="Color.Primary"
+                                       Href="@($"/apps/{context.Id}")"
+                                       Title="Ver detalles" />
+                        <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" 
+                                       Size="Size.Small" 
+                                       Color="Color.Info"
+                                       Href="@($"https://{context.Domain}")"
+                                       Target="_blank"
+                                       Title="Abrir app" />
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </MudPaper>
+
+    <!-- Contenedores Activos -->
+    <MudPaper Class="pa-4" Elevation="2">
+        <MudText Typo="Typo.h6" Class="mb-4">🐳 Contenedores Docker</MudText>
+        
+        @if (!_containers.Any())
+        {
+            <MudAlert Severity="Severity.Info">No hay contenedores en ejecución</MudAlert>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Hover="true">
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Imagen</th>
+                        <th>Estado</th>
+                        <th>Puertos</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var container in _containers.Take(5))
+                    {
+                        <tr>
+                            <td><strong>@container.Name</strong></td>
+                            <td>@container.Image</td>
+                            <MudChip T="string" Size="Size.Small" 
+                                     Color="@(container.State == "running" ? Color.Success : Color.Default)">
+                                @container.Status
+                            </MudChip>
+                            <td>
+                                @if (container.Ports.Any())
+                                {
+                                    <MudText Typo="Typo.caption">
+                                        @string.Join(", ", container.Ports.Select(p => $"{p.PublicPort}→{p.PrivatePort}"))
+                                    </MudText>
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">-</MudText>
+                                }
+                            </td>
+                            <td>
+                                <MudIconButton Icon="@Icons.Material.Filled.Visibility" 
+                                               Size="Size.Small"
+                                               Href="@($"/containers/{container.Id}")"
+                                               Title="Ver detalles" />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+            
+            @if (_containers.Count > 5)
+            {
+                <div class="d-flex justify-center mt-2">
+                    <MudButton Variant="Variant.Text" Href="/containers">
+                        Ver todos (@_containers.Count)
+                    </MudButton>
+                </div>
+            }
+        }
+    </MudPaper>
+}
+
+@code {
+    private bool _loading = true;
+    private bool _dockerAvailable = false;
+    private List<Application> _applications = new();
+    private List<DockerContainer> _containers = new();
+    private int _runningContainers = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        try
+        {
+            // Verificar Docker
+            _dockerAvailable = await DockerService.IsDockerAvailableAsync();
+
+            if (_dockerAvailable)
+            {
+                // Cargar aplicaciones
+                _applications = await AppService.GetApplicationsAsync();
+
+                // Cargar contenedores
+                _containers = await DockerService.GetContainersAsync(all: false);
+                _runningContainers = _containers.Count(c => c.State == "running");
+
+                // Sincronizar estado
+                await AppService.SyncWithDockerAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading dashboard data");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Color GetStatusColor(ApplicationStatus status)
+    {
+        return status switch
+        {
+            ApplicationStatus.Running => Color.Success,
+            ApplicationStatus.Stopped => Color.Default,
+            ApplicationStatus.Error => Color.Error,
+            ApplicationStatus.Deploying => Color.Info,
+            ApplicationStatus.Starting => Color.Warning,
+            _ => Color.Default
+        };
+    }
+}

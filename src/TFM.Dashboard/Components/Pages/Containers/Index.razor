@@ -1,0 +1,236 @@
+﻿@page "/containers"
+@using MudBlazor
+@using TFM.Dashboard.Models
+@using TFM.Dashboard.Interfaces
+@inject IDockerService DockerService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Contenedores Docker - SelfHosting</PageTitle>
+
+<div class="d-flex justify-space-between align-center mb-4">
+    <MudText Typo="Typo.h4">🐳 Contenedores Docker</MudText>
+    <div>
+        <MudSwitch T="bool" @bind-Checked="_showAll" Color="Color.Primary" Label="Mostrar todos" />
+        <MudIconButton Icon="@Icons.Material.Filled.Refresh" 
+                       Color="Color.Primary"
+                       OnClick="LoadContainers" />
+    </div>
+</div>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else
+{
+    <MudPaper Class="pa-4" Elevation="2">
+        <MudTable Items="_containers" Hover="true" Breakpoint="Breakpoint.Sm" Dense="false">
+            <HeaderContent>
+                <MudTh>Nombre</MudTh>
+                <MudTh>Imagen</MudTh>
+                <MudTh>Estado</MudTh>
+                <MudTh>Puertos</MudTh>
+                <MudTh>Creado</MudTh>
+                <MudTh>Acciones</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Nombre">
+                    <div class="d-flex align-center">
+                        <MudIcon Icon="@Icons.Material.Filled.ViewInAr" Size="Size.Small" Class="mr-2" />
+                        <strong>@context.Name</strong>
+                    </div>
+                </MudTd>
+                <MudTd DataLabel="Imagen">
+                    <MudText Typo="Typo.body2">@context.Image</MudText>
+                </MudTd>
+                <MudChip T="string" Size="Size.Small" 
+                         Color="@(context.State == "running" ? Color.Success : Color.Default)">
+                    @context.Status
+                </MudChip>
+                <MudTd DataLabel="Puertos">
+                    @if (context.Ports.Any())
+                    {
+                        @foreach (var port in context.Ports.Take(2))
+                        {
+                            <MudChip Size="Size.Small" Variant="Variant.Outlined" T="string">
+                                @port.PublicPort → @port.PrivatePort
+                            </MudChip>
+                        }
+                        @if (context.Ports.Count > 2)
+                        {
+                            <MudText Typo="Typo.caption">+@(context.Ports.Count - 2) más</MudText>
+                        }
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">-</MudText>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Creado">
+                    @context.Created.ToString("dd/MM/yyyy")
+                </MudTd>
+                <MudTd DataLabel="Acciones">
+                    <MudIconButton Icon="@Icons.Material.Filled.Terminal" 
+                                   Size="Size.Small"
+                                   Color="Color.Primary"
+                                   OnClick="@(() => ViewLogs(context))"
+                                   Title="Ver logs" />
+                    @if (context.State == "running")
+                    {
+                        <MudIconButton Icon="@Icons.Material.Filled.Stop" 
+                                       Size="Size.Small"
+                                       Color="Color.Warning"
+                                       OnClick="@(() => StopContainer(context.Id))"
+                                       Title="Detener" />
+                    }
+                    else
+                    {
+                        <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" 
+                                       Size="Size.Small"
+                                       Color="Color.Success"
+                                       OnClick="@(() => StartContainer(context.Id))"
+                                       Title="Iniciar" />
+                    }
+                    <MudIconButton Icon="@Icons.Material.Filled.Refresh" 
+                                   Size="Size.Small"
+                                   Color="Color.Info"
+                                   OnClick="@(() => RestartContainer(context.Id))"
+                                   Title="Reiniciar" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                                   Size="Size.Small"
+                                   Color="Color.Error"
+                                   OnClick="@(() => RemoveContainer(context))"
+                                   Title="Eliminar" />
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudPaper>
+}
+
+<!-- Dialog de Logs -->
+<MudDialog @bind-IsVisible="_showLogsDialog" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">📜 Logs - @_selectedContainerName</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudPaper Class="pa-4" Style="background-color: #1e1e1e; color: #d4d4d4; max-height: 500px; overflow-y: auto; font-family: monospace;">
+            @if (_containerLogs.Any())
+            {
+                @foreach (var log in _containerLogs)
+                {
+                    <div style="font-size: 12px; line-height: 1.4;">@log</div>
+                }
+            }
+            else
+            {
+                <MudText Typo="Typo.body2">No hay logs disponibles</MudText>
+            }
+        </MudPaper>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _showLogsDialog = false)">Cerrar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private bool _loading = true;
+    private bool _showAll = false;
+    private List<DockerContainer> _containers = new();
+    
+    private bool _showLogsDialog = false;
+    private string _selectedContainerName = "";
+    private List<string> _containerLogs = new();
+    
+    private DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Large, FullWidth = true };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadContainers();
+    }
+
+    private async Task LoadContainers()
+    {
+        _loading = true;
+        try
+        {
+            _containers = await DockerService.GetContainersAsync(all: _showAll);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task StopContainer(string id)
+    {
+        try
+        {
+            await DockerService.StopContainerAsync(id);
+            Snackbar.Add("Contenedor detenido", Severity.Success);
+            await LoadContainers();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task StartContainer(string id)
+    {
+        try
+        {
+            await DockerService.StartContainerAsync(id);
+            Snackbar.Add("Contenedor iniciado", Severity.Success);
+            await LoadContainers();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task RestartContainer(string id)
+    {
+        try
+        {
+            await DockerService.RestartContainerAsync(id);
+            Snackbar.Add("Contenedor reiniciado", Severity.Success);
+            await LoadContainers();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task RemoveContainer(DockerContainer container)
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Confirmar eliminación",
+            $"¿Eliminar el contenedor {container.Name}?",
+            yesText: "Eliminar", 
+            cancelText: "Cancelar");
+
+        if (result == true)
+        {
+            try
+            {
+                await DockerService.RemoveContainerAsync(container.Id);
+                Snackbar.Add("Contenedor eliminado", Severity.Success);
+                await LoadContainers();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private async Task ViewLogs(DockerContainer container)
+    {
+        _selectedContainerName = container.Name;
+        _containerLogs = await DockerService.GetContainerLogsAsync(container.Id, tail: 200);
+        _showLogsDialog = true;
+    }
+}

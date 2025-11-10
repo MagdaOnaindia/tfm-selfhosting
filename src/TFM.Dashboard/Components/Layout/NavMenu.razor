@@ -1,0 +1,40 @@
+﻿@using MudBlazor
+<MudNavMenu>
+    <MudNavLink Href="/" 
+                Icon="@Icons.Material.Filled.Dashboard" 
+                Match="NavLinkMatch.All">
+        Dashboard
+    </MudNavLink>
+    
+    <MudDivider Class="my-2" />
+    
+    <MudNavLink Href="/apps" 
+                Icon="@Icons.Material.Filled.Apps">
+        Aplicaciones
+    </MudNavLink>
+    
+    <MudNavLink Href="/deploy" 
+                Icon="@Icons.Material.Filled.CloudUpload">
+        Desplegar Nueva App
+    </MudNavLink>
+    
+    <MudNavLink Href="/containers" 
+                Icon="@Icons.Material.Filled.ViewInAr">
+        Contenedores
+    </MudNavLink>
+    
+    <MudDivider Class="my-2" />
+    
+    <MudNavGroup Title="Herramientas" Icon="@Icons.Material.Filled.Build" Expanded="false">
+        <MudNavLink Href="/tools/github" 
+                    Icon="@Icons.Material.Filled.Code">
+            GitHub Deployments
+        </MudNavLink>
+    </MudNavGroup>
+    
+    <MudDivider Class="my-2" />
+    
+    <MudText Typo="Typo.caption" Class="px-4 py-2" Color="Color.Secondary">
+        v1.0.0 - Single Tenant
+    </MudText>
+</MudNavMenu>

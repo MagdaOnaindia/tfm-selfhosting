@@ -1,0 +1,408 @@
+﻿@page "/deploy"
+@using MudBlazor
+@using TFM.Dashboard.Models
+@using TFM.Dashboard.Interfaces
+@inject IAppTemplateService TemplateService
+@inject IApplicationService AppService
+@inject IConfiguration Configuration
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Desplegar Aplicación - SelfHosting</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">🚀 Desplegar Nueva Aplicación</MudText>
+
+<MudStepper @ref="_stepper" Linear="true" HeaderSize="Size.Large" HeaderTextView="HeaderTextView.All">
+    
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <!-- PASO 1: Seleccionar Template -->
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <MudStep Title="Seleccionar Aplicación" Icon="@Icons.Material.Filled.Apps">
+        <ChildContent>
+            <MudText Typo="Typo.h6" Class="mb-4">Elige una aplicación para desplegar:</MudText>
+            
+            <!-- Filtros por categoría -->
+            <MudChipSet @bind-SelectedChip="_selectedCategoryChip" Filter="true" Mandatory="false" Class="mb-4" T="string">
+                <MudChip Text="Todas" Default="true" Value="@("all")">Todas</MudChip>
+                @foreach (var category in _categories)
+                {
+                    <MudChip Text="@category" Value="@category">@category</MudChip>
+                }
+            </MudChipSet>
+            
+            <MudGrid>
+                @foreach (var template in _filteredTemplates)
+                {
+                    <MudItem xs="12" sm="6" md="4">
+                        <MudCard Elevation="2" 
+                                 Class="@(_selectedTemplate?.Id == template.Id ? "selected-card" : "")"
+                                 Style="cursor: pointer; height: 100%;"
+                                 @onclick="@(() => SelectTemplate(template))">
+                            <MudCardHeader>
+                                <CardHeaderContent>
+                                    <MudText Typo="Typo.h6">@template.Name</MudText>
+                                    <MudChip Size="Size.Small" Variant="Variant.Text" T="string">@template.Category</MudChip>
+                                </CardHeaderContent>
+                                <CardHeaderActions>
+                                    @if (_selectedTemplate?.Id == template.Id)
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" />
+                                    }
+                                </CardHeaderActions>
+                            </MudCardHeader>
+                            <MudCardContent>
+                                <MudText Typo="Typo.body2">@template.Description</MudText>
+                                @if (template.Tags.Any())
+                                {
+                                    <div class="mt-2">
+                                        @foreach (var tag in template.Tags.Take(3))
+                                        {
+                                            <MudChip Size="Size.Small" Variant="Variant.Outlined" Class="mr-1" T="string">@tag</MudChip>
+                                        }
+                                    </div>
+                                }
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                }
+            </MudGrid>
+        </ChildContent>
+        <ChildContent>
+            <MudButton Variant="Variant.Filled" 
+                       Color="Color.Primary" 
+                       Disabled="@(_selectedTemplate == null)"
+                       OnClick="@(() => _stepper.NextStepAsync())">
+                Siguiente
+            </MudButton>
+        </ChildContent>
+    </MudStep>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <!-- PASO 2: Configuración -->
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <MudStep Title="Configuración" Icon="@Icons.Material.Filled.Settings">
+        <ChildContent>
+            @if (_selectedTemplate != null)
+            {
+                <MudText Typo="Typo.h6" Class="mb-4">Configuración de @_selectedTemplate.Name</MudText>
+
+                <MudGrid>
+                    <MudItem xs="12" md="6">
+                        <MudTextField @bind-Value="_appName" 
+                                      Label="Nombre de la aplicación"
+                                      Required="true"
+                                      Variant="Variant.Outlined"
+                                      HelperText="Nombre descriptivo para identificar tu aplicación" />
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudTextField @bind-Value="_appDomain" 
+                                      Label="Dominio"
+                                      Required="true"
+                                      Variant="Variant.Outlined"
+                                      Placeholder="cloud.ejemplo.com"
+                                      HelperText="Dominio completo (debe apuntar a tu VPS)" />
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_appDescription" 
+                                      Label="Descripción (opcional)"
+                                      Lines="3"
+                                      Variant="Variant.Outlined" />
+                    </MudItem>
+                </MudGrid>
+
+                <MudDivider Class="my-4" />
+
+                <MudText Typo="Typo.h6" Class="mb-4">Variables de Entorno</MudText>
+
+                <MudGrid>
+                    @foreach (var envVar in _selectedTemplate.RequiredEnvVars)
+                    {
+                        <MudItem xs="12" md="6">
+                            @if (envVar.IsSecret)
+                            {
+                                <MudTextField @bind-Value="_envVars[envVar.Name]" 
+                                              Label="@envVar.Name"
+                                              Required="@envVar.Required"
+                                              Variant="Variant.Outlined"
+                                              InputType="InputType.Password"
+                                              HelperText="@envVar.Description"
+                                              Adornment="Adornment.End"
+                                              AdornmentIcon="@Icons.Material.Filled.Lock" />
+                            }
+                            else
+                            {
+                                <MudTextField @bind-Value="_envVars[envVar.Name]" 
+                                              Label="@envVar.Name"
+                                              Required="@envVar.Required"
+                                              Variant="Variant.Outlined"
+                                              HelperText="@envVar.Description" />
+                            }
+                        </MudItem>
+                    }
+                </MudGrid>
+            }
+        </ChildContent>
+        <ChildContent>
+            <MudButton Variant="Variant.Text" OnClick="@(() => _stepper.PreviousStepAsync())">
+                Atrás
+            </MudButton>
+            <MudButton Variant="Variant.Filled" 
+                       Color="Color.Primary" 
+                       Disabled="@(!IsConfigValid())"
+                       OnClick="@(() => _stepper.NextStepAsync())">
+                Siguiente
+            </MudButton>
+        </ChildContent>
+    </MudStep>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <!-- PASO 3: Revisión y Despliegue -->
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <MudStep Title="Revisar y Desplegar" Icon="@Icons.Material.Filled.CloudUpload">
+        <ChildContent>
+            @if (_selectedTemplate != null)
+            {
+                <MudText Typo="Typo.h6" Class="mb-4">Revisión Final</MudText>
+
+                <MudPaper Class="pa-4" Elevation="0" Outlined="true">
+                    <MudGrid>
+                        <MudItem xs="12" md="6">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Aplicación</MudText>
+                            <MudText Typo="Typo.body1"><strong>@_appName</strong></MudText>
+                        </MudItem>
+
+                        <MudItem xs="12" md="6">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Tipo</MudText>
+                            <MudText Typo="Typo.body1">@_selectedTemplate.Name</MudText>
+                        </MudItem>
+
+                        <MudItem xs="12" md="6">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Dominio</MudText>
+                            <MudText Typo="Typo.body1">@_appDomain</MudText>
+                        </MudItem>
+
+                        <MudItem xs="12" md="6">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">URL de Acceso</MudText>
+                            <MudText Typo="Typo.body1">https://@_appDomain</MudText>
+                        </MudItem>
+
+                        @if (!string.IsNullOrEmpty(_appDescription))
+                        {
+                            <MudItem xs="12">
+                                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Descripción</MudText>
+                                <MudText Typo="Typo.body2">@_appDescription</MudText>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                </MudPaper>
+
+                <MudAlert Severity="Severity.Info" Class="mt-4">
+                    <MudText Typo="Typo.body2">
+                        <strong>Importante:</strong> Asegúrate de que:
+                    </MudText>
+                    <ul class="my-2">
+                        <li>El dominio <strong>@_appDomain</strong> apunte a la IP de tu VPS</li>
+                        <li>El dominio esté configurado en <code>/config/domains.json</code> del broker</li>
+                        <li>El puerto @_selectedTemplate.DefaultPort esté disponible</li>
+                    </ul>
+                </MudAlert>
+
+                @if (_deploying)
+                {
+                    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mt-4" />
+                    <MudText Typo="Typo.body2" Class="mt-2">Desplegando aplicación...</MudText>
+                    
+                    @if (!string.IsNullOrEmpty(_deploymentLog))
+                    {
+                        <MudPaper Class="pa-3 mt-2" Style="background-color: #1e1e1e; color: #d4d4d4; max-height: 300px; overflow-y: auto;">
+                            <pre style="margin: 0; font-size: 12px;">@_deploymentLog</pre>
+                        </MudPaper>
+                    }
+                }
+
+                @if (_deploymentError != null)
+                {
+                    <MudAlert Severity="Severity.Error" Class="mt-4">
+                        <strong>Error en el despliegue:</strong> @_deploymentError
+                    </MudAlert>
+                }
+            }
+        </ChildContent>
+        <ChildContent>
+            <MudButton Variant="Variant.Text" 
+                       Disabled="_deploying"
+                       OnClick="@(() => _stepper.PreviousStepAsync())">
+                Atrás
+            </MudButton>
+            <MudButton Variant="Variant.Filled" 
+                       Color="Color.Success" 
+                       Disabled="_deploying"
+                       StartIcon="@Icons.Material.Filled.RocketLaunch"
+                       OnClick="DeployApplication">
+                @(_deploying ? "Desplegando..." : "Desplegar Ahora")
+            </MudButton>
+        </ChildContent>
+    </MudStep>
+
+</MudStepper>
+
+@code {
+    private MudStepper _stepper = null!;
+    private List<AppTemplate> _templates = new();
+    private List<AppTemplate> _filteredTemplates = new();
+    private List<string> _categories = new();
+    private MudChip<string>? _selectedCategoryChip;
+    private AppTemplate? _selectedTemplate;
+    
+    private string _appName = "";
+    private string _appDomain = "";
+    private string _appDescription = "";
+    private Dictionary<string, string> _envVars = new();
+    
+    private bool _deploying = false;
+    private string? _deploymentError = null;
+    private string _deploymentLog = "";
+
+    protected override void OnInitialized()
+    {
+        _templates = TemplateService.GetTemplates();
+        _categories = TemplateService.GetCategories();
+        _filteredTemplates = _templates;
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            StateHasChanged();
+        }
+    }
+
+    private void OnCategoryChanged()
+    {
+        var selectedCategory = _selectedCategoryChip?.Value as string;
+        
+        if (string.IsNullOrEmpty(selectedCategory) || selectedCategory == "all")
+        {
+            _filteredTemplates = _templates;
+        }
+        else
+        {
+            _filteredTemplates = TemplateService.GetTemplatesByCategory(selectedCategory);
+        }
+        
+        StateHasChanged();
+    }
+
+    private void SelectTemplate(AppTemplate template)
+    {
+        _selectedTemplate = template;
+        _appName = template.Name;
+        
+        // Inicializar variables de entorno con valores por defecto
+        _envVars.Clear();
+        foreach (var envVar in template.RequiredEnvVars)
+        {
+            _envVars[envVar.Name] = envVar.DefaultValue ?? "";
+        }
+    }
+
+    private bool IsConfigValid()
+    {
+        if (string.IsNullOrWhiteSpace(_appName) || string.IsNullOrWhiteSpace(_appDomain))
+            return false;
+
+        if (_selectedTemplate == null)
+            return false;
+
+        return TemplateService.ValidateVariables(_selectedTemplate, _envVars);
+    }
+
+    private async Task DeployApplication()
+    {
+        if (_selectedTemplate == null) return;
+
+        _deploying = true;
+        _deploymentError = null;
+        _deploymentLog = "Iniciando deployment...\n";
+
+        try
+        {
+            var serviceName = _appName.ToLowerInvariant().Replace(" ", "-");
+            var basePath = Configuration["System:AppsDataPath"] ?? "/opt/selfhosting/apps";
+            var dataPath = Path.Combine(basePath, serviceName);
+
+            _deploymentLog += $"Creando directorio: {dataPath}\n";
+            Directory.CreateDirectory(dataPath);
+
+            // Preparar variables
+            var composeVars = new Dictionary<string, string>(_envVars)
+            {
+                ["SERVICE_NAME"] = serviceName,
+                ["DOMAIN"] = _appDomain,
+                ["DATA_PATH"] = dataPath,
+                ["INTERNAL_PORT"] = _selectedTemplate.DefaultPort.ToString()
+            };
+
+            _deploymentLog += "Generando docker-compose.yml...\n";
+            var composeContent = await TemplateService.GenerateDockerComposeAsync(_selectedTemplate, composeVars);
+
+            // Guardar docker-compose
+            var composePath = Path.Combine(dataPath, "docker-compose.yml");
+            await File.WriteAllTextAsync(composePath, composeContent);
+            _deploymentLog += $"Docker Compose guardado en: {composePath}\n";
+
+            // Crear aplicación
+            _deploymentLog += "Creando registro de aplicación...\n";
+            var app = new Application
+            {
+                Name = _appName,
+                Type = _selectedTemplate.Id,
+                Domain = _appDomain,
+                Description = _appDescription,
+                ComposeFilePath = composePath,
+                Port = _selectedTemplate.DefaultPort,
+                Environment = _envVars,
+                Source = new DeploymentSource
+                {
+                    Type = DeploymentType.Template
+                }
+            };
+
+            app = await AppService.CreateApplicationAsync(app);
+            _deploymentLog += $"Aplicación creada con ID: {app.Id}\n";
+
+            // Desplegar
+            _deploymentLog += "Ejecutando docker compose up...\n";
+            StateHasChanged();
+
+            await AppService.DeployApplicationAsync(app);
+            
+            _deploymentLog += "✅ Deployment completado exitosamente!\n";
+            
+            Snackbar.Add($"✅ {_appName} desplegado correctamente", Severity.Success);
+            
+            await Task.Delay(2000);
+            Navigation.NavigateTo($"/apps/{app.Id}");
+        }
+        catch (Exception ex)
+        {
+            _deploymentError = ex.Message;
+            _deploymentLog += $"\n❌ ERROR: {ex.Message}\n";
+            Snackbar.Add($"❌ Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _deploying = false;
+        }
+    }
+}
+
+<style>
+    .selected-card {
+        border: 2px solid var(--mud-palette-primary);
+        box-shadow: 0 4px 8px rgba(33, 150, 243, 0.3);
+    }
+</style>

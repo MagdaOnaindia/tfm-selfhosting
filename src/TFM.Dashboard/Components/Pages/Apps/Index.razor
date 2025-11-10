@@ -1,0 +1,235 @@
+﻿@page "/apps"
+@using MudBlazor
+@using TFM.Dashboard.Models
+@using TFM.Dashboard.Interfaces
+@inject IApplicationService AppService
+@inject IDockerService DockerService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Aplicaciones - SelfHosting</PageTitle>
+
+<div class="d-flex justify-space-between align-center mb-4">
+    <MudText Typo="Typo.h4">📦 Aplicaciones</MudText>
+    <MudButton Variant="Variant.Filled" 
+               Color="Color.Primary" 
+               StartIcon="@Icons.Material.Filled.Add"
+               Href="/deploy">
+        Nueva Aplicación
+    </MudButton>
+</div>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else if (!_applications.Any())
+{
+    <MudPaper Class="pa-8 text-center" Elevation="0" Outlined="true">
+        <MudIcon Icon="@Icons.Material.Outlined.Apps" Size="Size.Large" Color="Color.Secondary" />
+        <MudText Typo="Typo.h6" Class="mt-4">No hay aplicaciones desplegadas</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+            Comienza desplegando tu primera aplicación
+        </MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/deploy">
+            Desplegar Aplicación
+        </MudButton>
+    </MudPaper>
+}
+else
+{
+    <MudGrid>
+        @foreach (var app in _applications)
+        {
+            <MudItem xs="12" md="6" lg="4">
+                <MudCard Elevation="2">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">@app.Name</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@app.Type</MudText>
+                        </CardHeaderContent>
+                        <CardHeaderActions>
+                            <MudChip Size="Size.Small" Color="@GetStatusColor(app.Status)" T="string">
+                                @app.Status
+                            </MudChip>
+                        </CardHeaderActions>
+                    </MudCardHeader>
+                    
+                    <MudCardContent>
+                        @if (!string.IsNullOrEmpty(app.Description))
+                        {
+                            <MudText Typo="Typo.body2" Class="mb-2">@app.Description</MudText>
+                        }
+                        
+                        <MudDivider Class="my-2" />
+                        
+                        <div class="d-flex align-center mb-1">
+                            <MudIcon Icon="@Icons.Material.Filled.Language" Size="Size.Small" Class="mr-2" />
+                            <MudLink Href="@($"https://{app.Domain}")" Target="_blank" Typo="Typo.body2">
+                                @app.Domain
+                            </MudLink>
+                        </div>
+                        
+                        <div class="d-flex align-center mb-1">
+                            <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Size="Size.Small" Class="mr-2" />
+                            <MudText Typo="Typo.caption">
+                                Creado: @app.CreatedAt.ToString("dd/MM/yyyy")
+                            </MudText>
+                        </div>
+                        
+                        @if (app.LastDeployedAt.HasValue)
+                        {
+                            <div class="d-flex align-center">
+                                <MudIcon Icon="@Icons.Material.Filled.Update" Size="Size.Small" Class="mr-2" />
+                                <MudText Typo="Typo.caption">
+                                    Actualizado: @app.LastDeployedAt.Value.ToString("dd/MM/yyyy HH:mm")
+                                </MudText>
+                            </div>
+                        }
+                    </MudCardContent>
+                    
+                    <MudCardActions>
+                        <MudIconButton Icon="@Icons.Material.Filled.Visibility" 
+                                       Color="Color.Primary"
+                                       Href="@($"/apps/{app.Id}")"
+                                       Title="Ver detalles" />
+                        
+                        @if (app.Status == ApplicationStatus.Running)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.Stop" 
+                                           Color="Color.Warning"
+                                           OnClick="@(() => StopApp(app))"
+                                           Title="Detener" />
+                        }
+                        else
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" 
+                                           Color="Color.Success"
+                                           OnClick="@(() => StartApp(app))"
+                                           Title="Iniciar" />
+                        }
+                        
+                        <MudIconButton Icon="@Icons.Material.Filled.Refresh" 
+                                       Color="Color.Info"
+                                       OnClick="@(() => RestartApp(app))"
+                                       Title="Reiniciar" />
+                        
+                        <MudSpacer />
+                        
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                                       Color="Color.Error"
+                                       OnClick="@(() => DeleteApp(app))"
+                                       Title="Eliminar" />
+                    </MudCardActions>
+                </MudCard>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@code {
+    private bool _loading = true;
+    private List<Application> _applications = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadApplications();
+    }
+
+    private async Task LoadApplications()
+    {
+        _loading = true;
+        try
+        {
+            _applications = await AppService.GetApplicationsAsync();
+            await AppService.SyncWithDockerAsync();
+            _applications = await AppService.GetApplicationsAsync();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Color GetStatusColor(ApplicationStatus status)
+    {
+        return status switch
+        {
+            ApplicationStatus.Running => Color.Success,
+            ApplicationStatus.Stopped => Color.Default,
+            ApplicationStatus.Error => Color.Error,
+            ApplicationStatus.Deploying => Color.Info,
+            ApplicationStatus.Starting => Color.Warning,
+            ApplicationStatus.Updating => Color.Info,
+            _ => Color.Default
+        };
+    }
+
+    private async Task StopApp(Application app)
+    {
+        try
+        {
+            await AppService.StopApplicationAsync(app.Id);
+            Snackbar.Add($"Aplicación {app.Name} detenida", Severity.Success);
+            await LoadApplications();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task StartApp(Application app)
+    {
+        try
+        {
+            await AppService.StartApplicationAsync(app.Id);
+            Snackbar.Add($"Aplicación {app.Name} iniciada", Severity.Success);
+            await LoadApplications();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task RestartApp(Application app)
+    {
+        try
+        {
+            await AppService.StopApplicationAsync(app.Id);
+            await Task.Delay(1000);
+            await AppService.StartApplicationAsync(app.Id);
+            Snackbar.Add($"Aplicación {app.Name} reiniciada", Severity.Success);
+            await LoadApplications();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task DeleteApp(Application app)
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Confirmar eliminación",
+            $"¿Estás seguro de que quieres eliminar {app.Name}? Esta acción no se puede deshacer.",
+            yesText: "Eliminar", 
+            cancelText: "Cancelar");
+
+        if (result == true)
+        {
+            try
+            {
+                await AppService.DeleteApplicationAsync(app.Id);
+                Snackbar.Add($"Aplicación {app.Name} eliminada", Severity.Success);
+                await LoadApplications();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+}

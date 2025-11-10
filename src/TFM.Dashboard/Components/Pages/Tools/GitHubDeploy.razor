@@ -1,0 +1,336 @@
+﻿@page "/tools/github"
+@using MudBlazor
+@using TFM.Dashboard.Interfaces
+@using TFM.Dashboard.Models
+@inject IAnsibleService AnsibleService
+@inject IGitService GitService
+@inject IApplicationService AppService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>GitHub Deployment - SelfHosting</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">📦 Deployment desde GitHub</MudText>
+
+<MudPaper Class="pa-4" Elevation="2">
+    <MudText Typo="Typo.h6" Class="mb-4">Configuración de Repositorio</MudText>
+
+    <MudGrid>
+        <MudItem xs="12">
+            <MudTextField @bind-Value="_gitUrl" 
+                          Label="URL del Repositorio"
+                          Placeholder="https://github.com/usuario/repo.git"
+                          Variant="Variant.Outlined"
+                          HelperText="URL HTTPS del repositorio de GitHub"
+                          Required="true"
+                          Validation="@(new Func<string, string?>(ValidateGitUrl))" />
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudTextField @bind-Value="_branch" 
+                          Label="Rama"
+                          Placeholder="main"
+                          Variant="Variant.Outlined"
+                          Required="true" />
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudTextField @bind-Value="_appName" 
+                          Label="Nombre de la Aplicación"
+                          Variant="Variant.Outlined"
+                          Required="true" />
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudTextField @bind-Value="_domain" 
+                          Label="Dominio"
+                          Placeholder="app.ejemplo.com"
+                          Variant="Variant.Outlined"
+                          Required="true" />
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudDivider />
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudText Typo="Typo.subtitle1" Class="mb-2"><strong>Credenciales de GitHub</strong></MudText>
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4">
+                Para repositorios privados, necesitarás un Personal Access Token.
+                <br />
+                Créalo en: <MudLink Href="https://github.com/settings/tokens" Target="_blank">GitHub Settings → Developer settings → Tokens</MudLink>
+            </MudAlert>
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudTextField @bind-Value="_githubUsername" 
+                          Label="Usuario de GitHub (opcional)"
+                          Variant="Variant.Outlined"
+                          HelperText="Solo para repositorios privados" />
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudTextField @bind-Value="_githubToken" 
+                          Label="Personal Access Token (opcional)"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Password"
+                          HelperText="Solo para repositorios privados" />
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudDivider />
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudText Typo="Typo.subtitle1" Class="mb-2"><strong>Tipo de Deployment</strong></MudText>
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudRadioGroup @bind-SelectedOption="_deploymentType" T="string">
+                <MudRadio Option="@("docker-compose")" Color="Color.Primary" T="string">
+                    <strong>Docker Compose</strong> - El repo contiene docker-compose.yml
+                </MudRadio>
+                <MudRadio Option="@("dockerfile")" Color="Color.Primary" T="string">
+                    <strong>Dockerfile</strong> - El repo contiene un Dockerfile
+                </MudRadio>
+                <MudRadio Option="@("ansible")" Color="Color.Primary" T="string">
+                    <strong>Ansible Playbook</strong> - Usar playbook personalizado
+                </MudRadio>
+            </MudRadioGroup>
+        </MudItem>
+
+        @if (_deploymentType == "ansible")
+        {
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_playbookPath" 
+                              Label="Ruta al Playbook"
+                              Placeholder="deploy.yml"
+                              Variant="Variant.Outlined"
+                              HelperText="Ruta relativa dentro del repositorio" />
+            </MudItem>
+        }
+    </MudGrid>
+
+    <div class="d-flex justify-end mt-4">
+        <MudButton Variant="Variant.Filled" 
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.CloudUpload"
+                   Disabled="_deploying || !IsFormValid()"
+                   OnClick="DeployFromGitHub">
+            @(_deploying ? "Desplegando..." : "Desplegar")
+        </MudButton>
+    </div>
+
+    @if (_deploying)
+    {
+        <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mt-4" />
+    }
+
+    @if (!string.IsNullOrEmpty(_deploymentOutput))
+    {
+        <MudPaper Class="pa-4 mt-4" Style="background-color: #1e1e1e; color: #d4d4d4; max-height: 400px; overflow-y: auto;">
+            <MudText Typo="Typo.subtitle2" Class="mb-2" Style="color: #4fc3f7;">📜 Output del Deployment:</MudText>
+            <pre style="margin: 0; white-space: pre-wrap; font-size: 12px;">@_deploymentOutput</pre>
+        </MudPaper>
+    }
+</MudPaper>
+
+@code {
+    private string _gitUrl = "";
+    private string _branch = "main";
+    private string _appName = "";
+    private string _domain = "";
+    private string _githubUsername = "";
+    private string _githubToken = "";
+    private string _deploymentType = "docker-compose";
+    private string _playbookPath = "deploy.yml";
+
+    private bool _deploying = false;
+    private string _deploymentOutput = "";
+
+    private string? ValidateGitUrl(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            return "URL requerida";
+
+        if (!GitService.IsValidRepositoryUrl(url))
+            return "URL de repositorio no válida";
+
+        return null;
+    }
+
+    private bool IsFormValid()
+    {
+        return !string.IsNullOrWhiteSpace(_gitUrl) &&
+               !string.IsNullOrWhiteSpace(_branch) &&
+               !string.IsNullOrWhiteSpace(_appName) &&
+               !string.IsNullOrWhiteSpace(_domain) &&
+               GitService.IsValidRepositoryUrl(_gitUrl);
+    }
+
+    private async Task DeployFromGitHub()
+    {
+        _deploying = true;
+        _deploymentOutput = "";
+
+        try
+        {
+            _deploymentOutput += "🚀 Iniciando deployment desde GitHub...\n\n";
+
+            // Verificar Ansible
+            var ansibleInstalled = await AnsibleService.IsAnsibleInstalledAsync();
+            if (!ansibleInstalled)
+            {
+                throw new InvalidOperationException("Ansible no está instalado en el sistema");
+            }
+
+            var ansibleVersion = await AnsibleService.GetAnsibleVersionAsync();
+            _deploymentOutput += $"✓ Ansible instalado: {ansibleVersion}\n\n";
+
+            // Generar playbook dinámicamente
+            var serviceName = _appName.ToLowerInvariant().Replace(" ", "-");
+            var appDir = $"/opt/selfhosting/apps/{serviceName}";
+
+            var playbookContent = GeneratePlaybook(serviceName, appDir);
+
+            var template = new PlaybookTemplate
+            {
+                Name = $"github-deploy-{serviceName}",
+                Content = playbookContent,
+                Variables = new Dictionary<string, string>
+                {
+                    ["git_url"] = _gitUrl,
+                    ["git_branch"] = _branch,
+                    ["app_name"] = serviceName,
+                    ["domain"] = _domain,
+                    ["deployment_type"] = _deploymentType
+                }
+            };
+
+            // Agregar credenciales si existen (solo en memoria, nunca se persisten)
+            var extraVars = new Dictionary<string, string>(template.Variables);
+            if (!string.IsNullOrWhiteSpace(_githubUsername))
+            {
+                extraVars["github_user"] = _githubUsername;
+            }
+            if (!string.IsNullOrWhiteSpace(_githubToken))
+            {
+                extraVars["github_token"] = _githubToken;
+            }
+
+            _deploymentOutput += "📝 Generando playbook de Ansible...\n";
+            var playbookPath = await AnsibleService.GeneratePlaybookAsync(template);
+            _deploymentOutput += $"✓ Playbook generado: {playbookPath}\n\n";
+
+            StateHasChanged();
+
+            // Ejecutar playbook
+            _deploymentOutput += "⚙️ Ejecutando playbook de Ansible...\n\n";
+            var result = await AnsibleService.RunPlaybookAsync(
+                playbookPath, 
+                extraVars,
+                onOutput: (line) =>
+                {
+                    _deploymentOutput += line + "\n";
+                    InvokeAsync(StateHasChanged);
+                });
+
+            // Limpiar credenciales de memoria
+            _githubUsername = "";
+            _githubToken = "";
+
+            if (result.Success)
+            {
+                _deploymentOutput += $"\n✅ Deployment completado exitosamente en {result.Duration.TotalSeconds:F1}s\n";
+                Snackbar.Add("✅ Deployment exitoso", Severity.Success);
+
+                // Crear registro de aplicación
+                var app = new Application
+                {
+                    Name = _appName,
+                    Type = "github",
+                    Domain = _domain,
+                    Source = new DeploymentSource
+                    {
+                        Type = DeploymentType.GitHub,
+                        GitUrl = _gitUrl,
+                        GitBranch = _branch
+                    }
+                };
+
+                await AppService.CreateApplicationAsync(app);
+                await AppService.SyncWithDockerAsync();
+
+                await Task.Delay(2000);
+                Navigation.NavigateTo("/apps");
+            }
+            else
+            {
+                _deploymentOutput += $"\n❌ Deployment falló con código {result.ExitCode}\n";
+                _deploymentOutput += $"Error: {result.Error}\n";
+                Snackbar.Add("❌ Deployment falló", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            _deploymentOutput += $"\n❌ Error: {ex.Message}\n";
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _deploying = false;
+        }
+    }
+
+    private string GeneratePlaybook(string serviceName, string appDir)
+    {
+        return $@"---
+- name: Deploy application from GitHub
+  hosts: localhost
+  connection: local
+  become: yes
+  
+  tasks:
+    - name: Install Git
+      apt:
+        name: git
+        state: present
+        update_cache: yes
+      when: ansible_os_family == 'Debian'
+
+    - name: Create app directory
+      file:
+        path: {appDir}
+        state: directory
+        mode: '0755'
+
+    - name: Clone repository
+      git:
+        repo: ""{{{{ git_url }}}}""
+        dest: {appDir}/source
+        version: ""{{{{ git_branch }}}}""
+        force: yes
+      environment:
+        GIT_TERMINAL_PROMPT: '0'
+
+    - name: Deploy with Docker Compose
+      shell: |
+        cd {appDir}/source
+        docker compose up -d --remove-orphans
+      when: ""{_deploymentType}"" == ""docker-compose""
+
+    - name: Build and deploy with Dockerfile
+      shell: |
+        cd {appDir}/source
+        docker build -t {serviceName} .
+        docker stop {serviceName} || true
+        docker rm {serviceName} || true
+        docker run -d --name {serviceName} --network traefik-net {serviceName}
+      when: ""{_deploymentType}"" == ""dockerfile""
+
+    - name: Show completion message
+      debug:
+        msg: ""Application {{{{ app_name }}}} deployed to {{{{ domain }}}}""
+";
+    }
+}
