@@ -59,7 +59,7 @@ app.UseAntiforgery();
 // Mapea el componente raíz de tu aplicación Blazor.
 // La plantilla de .NET 8 usa 'App' como componente raíz que contiene el Router.
 // Si has movido el Router a 'Routes.razor', debes usar app.MapRazorComponents<Routes>();
-app.MapRazorComponents<App>();
+app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 
 // Mapea tu endpoint de health-check personalizado.
 app.MapGet("/health", () => Results.Json(new

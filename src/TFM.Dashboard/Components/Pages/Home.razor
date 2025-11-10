@@ -23,7 +23,7 @@ else
     <MudCardContent Class="flex-grow-1">
                     <div class="d-flex justify-space-between align-center">
                         <div>
-                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Aplicaciones</MudText>
+                            <MudText Typo="Typo.subtitle2" >Aplicaciones</MudText>
                             <MudText Typo="Typo.h4">@_applications.Count</MudText>
                         </div>
                         <MudIcon Icon="@Icons.Material.Filled.Apps" Color="Color.Primary" Size="Size.Large" />
@@ -40,7 +40,7 @@ else
     <MudCardContent Class="flex-grow-1">
                     <div class="d-flex justify-space-between align-center">
                         <div>
-                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Contenedores</MudText>
+                            <MudText Typo="Typo.subtitle2" >Contenedores</MudText>
                             <MudText Typo="Typo.h4">@_containers.Count</MudText>
                         </div>
                         <MudIcon Icon="@Icons.Material.Filled.ViewInAr" Color="Color.Info" Size="Size.Large" />
@@ -57,7 +57,7 @@ else
     <MudCardContent Class="flex-grow-1">
                     <div class="d-flex justify-space-between align-center">
                         <div>
-                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">En Ejecución</MudText>
+                            <MudText Typo="Typo.subtitle2">En Ejecución</MudText>
                             <MudText Typo="Typo.h4">@_runningContainers</MudText>
                         </div>
                         <MudIcon Icon="@Icons.Material.Filled.PlayCircle" Color="Color.Success" Size="Size.Large" />
@@ -71,7 +71,7 @@ else
     <MudCardContent Class="flex-grow-1">
                     <div class="d-flex justify-space-between align-center">
                         <div>
-                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Docker</MudText>
+                            <MudText Typo="Typo.subtitle2">Docker</MudText>
                             <MudText Typo="Typo.h6" Color="@(_dockerAvailable ? Color.Success : Color.Error)">
                                 <MudIcon Icon="@(_dockerAvailable ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Error)" Size="Size.Small" />
                                 @(_dockerAvailable ? "Disponible" : "No disponible")
@@ -87,7 +87,7 @@ else
     <!-- Aplicaciones Recientes -->
     <MudPaper Class="pa-4 mb-4" Elevation="2">
         <div class="d-flex justify-space-between align-center mb-4">
-            <MudText Typo="Typo.h6">📦 Aplicaciones Desplegadas</MudText>
+            <MudText Typo="Typo.h6">Aplicaciones Desplegadas</MudText>
             <MudButton Variant="Variant.Filled" 
                        Color="Color.Primary" 
                        StartIcon="@Icons.Material.Filled.Add"
@@ -159,7 +159,7 @@ else
 
     <!-- Contenedores Activos -->
     <MudPaper Class="pa-4" Elevation="2">
-        <MudText Typo="Typo.h6" Class="mb-4">🐳 Contenedores Docker</MudText>
+        <MudText Typo="Typo.h6" Class="mb-4">Contenedores Docker</MudText>
         
         @if (!_containers.Any())
         {
