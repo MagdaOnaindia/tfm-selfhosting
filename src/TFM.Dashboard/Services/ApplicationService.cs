@@ -7,10 +7,6 @@ namespace TFM.Dashboard.Services;
 /// <summary>
 /// Implementación del servicio de gestión de aplicaciones.
 /// Usa archivo JSON como persistencia.
-/// 
-/// SOLID:
-/// - S: Solo gestiona aplicaciones
-/// - D: Depende de IDockerService y ITraefikConfigService
 /// </summary>
 public class ApplicationService : IApplicationService
 {
@@ -33,7 +29,6 @@ public class ApplicationService : IApplicationService
         _dataPath = configuration["Data:AppsPath"]
             ?? throw new InvalidOperationException("Data:AppsPath not configured");
 
-        // Crear directorio si no existe
         var directory = Path.GetDirectoryName(_dataPath);
         if (!string.IsNullOrEmpty(directory))
         {
@@ -81,7 +76,7 @@ public class ApplicationService : IApplicationService
             apps.Add(app);
             await SaveApplicationsAsync(apps);
 
-            _logger.LogInformation("✓ Application created: {Name} ({Id})", app.Name, app.Id);
+            _logger.LogInformation("Application created: {Name} ({Id})", app.Name, app.Id);
             return app;
         }
         finally
@@ -102,7 +97,7 @@ public class ApplicationService : IApplicationService
             {
                 apps[index] = app;
                 await SaveApplicationsAsync(apps);
-                _logger.LogInformation("✓ Application updated: {Name}", app.Name);
+                _logger.LogInformation("Application updated: {Name}", app.Name);
             }
             else
             {
@@ -160,7 +155,7 @@ public class ApplicationService : IApplicationService
                 apps.Remove(app);
                 await SaveApplicationsAsync(apps);
 
-                _logger.LogInformation("🗑️ Application deleted: {Name}", app.Name);
+                _logger.LogInformation("Application deleted: {Name}", app.Name);
             }
         }
         finally
@@ -171,7 +166,7 @@ public class ApplicationService : IApplicationService
 
     public async Task<Application> DeployApplicationAsync(Application app)
     {
-        _logger.LogInformation("🚀 Deploying application: {Name}", app.Name);
+        _logger.LogInformation("Deploying application: {Name}", app.Name);
 
         app.Status = ApplicationStatus.Deploying;
         await UpdateApplicationAsync(app);
@@ -204,12 +199,12 @@ public class ApplicationService : IApplicationService
             app.LastDeployedAt = DateTime.UtcNow;
             await UpdateApplicationAsync(app);
 
-            _logger.LogInformation("✅ Application deployed successfully: {Name}", app.Name);
+            _logger.LogInformation("Application deployed successfully: {Name}", app.Name);
             return app;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "❌ Application deployment failed: {Name}", app.Name);
+            _logger.LogError(ex, " Application deployment failed: {Name}", app.Name);
             app.Status = ApplicationStatus.Error;
             await UpdateApplicationAsync(app);
             throw;
@@ -224,7 +219,7 @@ public class ApplicationService : IApplicationService
             throw new InvalidOperationException($"Application {id} not found");
         }
 
-        _logger.LogInformation("⏹️ Stopping application: {Name}", app.Name);
+        _logger.LogInformation("Stopping application: {Name}", app.Name);
 
         foreach (var containerId in app.ContainerIds)
         {
@@ -250,7 +245,7 @@ public class ApplicationService : IApplicationService
             throw new InvalidOperationException($"Application {id} not found");
         }
 
-        _logger.LogInformation("▶️ Starting application: {Name}", app.Name);
+        _logger.LogInformation(" Starting application: {Name}", app.Name);
 
         foreach (var containerId in app.ContainerIds)
         {
@@ -270,7 +265,7 @@ public class ApplicationService : IApplicationService
 
     public async Task SyncWithDockerAsync()
     {
-        _logger.LogInformation("🔄 Syncing applications with Docker...");
+        _logger.LogInformation(" Syncing applications with Docker...");
 
         var apps = await GetApplicationsAsync();
         var containers = await _dockerService.GetContainersAsync(all: false);
@@ -281,7 +276,7 @@ public class ApplicationService : IApplicationService
         }
 
         await SaveApplicationsAsync(apps);
-        _logger.LogInformation("✅ Sync completed: {Count} applications", apps.Count);
+        _logger.LogInformation("Sync completed: {Count} applications", apps.Count);
     }
 
     public async Task<List<string>> GetApplicationLogsAsync(string id, int tail = 100)

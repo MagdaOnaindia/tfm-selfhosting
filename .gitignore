@@ -21,3 +21,4 @@ logs/
 /src/TFM.Agent/appsettings.Production.json
 /src/TFM.Broker/appsettings.Production.json
 /src/TFM.Dashboard/appsettings.Production.json
+/certs

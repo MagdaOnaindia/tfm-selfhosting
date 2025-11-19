@@ -14,14 +14,10 @@
 
 <MudStepper @ref="_stepper" Linear="true" HeaderSize="Size.Large" HeaderTextView="HeaderTextView.All">
     
-    <!-- ══════════════════════════════════════════════════════════ -->
-    <!-- PASO 1: Seleccionar Template -->
-    <!-- ══════════════════════════════════════════════════════════ -->
     <MudStep Title="Seleccionar Aplicación" Icon="@Icons.Material.Filled.Apps">
         <ChildContent>
             <MudText Typo="Typo.h6" Class="mb-4">Elige una aplicación para desplegar:</MudText>
             
-            <!-- Filtros por categoría -->
             <MudChipSet @bind-SelectedChip="_selectedCategoryChip" Filter="true" Mandatory="false" Class="mb-4" T="string">
                 <MudChip Text="Todas" Default="true" Value="@("all")">Todas</MudChip>
                 @foreach (var category in _categories)
@@ -77,9 +73,6 @@
         </ChildContent>
     </MudStep>
 
-    <!-- ══════════════════════════════════════════════════════════ -->
-    <!-- PASO 2: Configuración -->
-    <!-- ══════════════════════════════════════════════════════════ -->
     <MudStep Title="Configuración" Icon="@Icons.Material.Filled.Settings">
         <ChildContent>
             @if (_selectedTemplate != null)
@@ -157,9 +150,6 @@
         </ChildContent>
     </MudStep>
 
-    <!-- ══════════════════════════════════════════════════════════ -->
-    <!-- PASO 3: Revisión y Despliegue -->
-    <!-- ══════════════════════════════════════════════════════════ -->
     <MudStep Title="Revisar y Desplegar" Icon="@Icons.Material.Filled.CloudUpload">
         <ChildContent>
             @if (_selectedTemplate != null)
@@ -380,9 +370,9 @@
 
             await AppService.DeployApplicationAsync(app);
             
-            _deploymentLog += "✅ Deployment completado exitosamente!\n";
+            _deploymentLog += "Deployment completado exitosamente!\n";
             
-            Snackbar.Add($"✅ {_appName} desplegado correctamente", Severity.Success);
+            Snackbar.Add($"{_appName} desplegado correctamente", Severity.Success);
             
             await Task.Delay(2000);
             Navigation.NavigateTo($"/apps/{app.Id}");
@@ -390,8 +380,8 @@
         catch (Exception ex)
         {
             _deploymentError = ex.Message;
-            _deploymentLog += $"\n❌ ERROR: {ex.Message}\n";
-            Snackbar.Add($"❌ Error: {ex.Message}", Severity.Error);
+            _deploymentLog += $"\n ERROR: {ex.Message}\n";
+            Snackbar.Add($" Error: {ex.Message}", Severity.Error);
         }
         finally
         {

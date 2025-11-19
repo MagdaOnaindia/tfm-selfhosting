@@ -65,7 +65,6 @@ app.MapPost("/proxy", async (
             domain = context.Request.Host.Host;
         }
 
-        // AÑADIR VALIDACIÓN
         if (!IsValidDomain(domain))
         {
             context.Response.StatusCode = 400;

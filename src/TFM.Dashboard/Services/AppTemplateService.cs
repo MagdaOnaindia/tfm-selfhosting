@@ -5,9 +5,6 @@ namespace TFM.Dashboard.Services;
 
 /// <summary>
 /// Proporciona templates predefinidos para aplicaciones populares.
-/// 
-/// SOLID:
-/// - S: Solo gestión de templates
 /// </summary>
 public class AppTemplateService : IAppTemplateService
 {
@@ -69,9 +66,7 @@ public class AppTemplateService : IAppTemplateService
     {
         return new List<AppTemplate>
         {
-            // ════════════════════════════════════════════════════════
-            // NEXTCLOUD
-            // ════════════════════════════════════════════════════════
+
             new AppTemplate
             {
                 Id = "nextcloud",
@@ -161,9 +156,7 @@ volumes:
                 Documentation = "https://github.com/nextcloud/docker"
             },
 
-            // ════════════════════════════════════════════════════════
-            // GITEA
-            // ════════════════════════════════════════════════════════
+
             new AppTemplate
             {
                 Id = "gitea",
@@ -234,9 +227,6 @@ networks:
                 Documentation = "https://docs.gitea.io/"
             },
 
-            // ════════════════════════════════════════════════════════
-            // PORTAINER
-            // ════════════════════════════════════════════════════════
             new AppTemplate
             {
                 Id = "portainer",
@@ -273,9 +263,6 @@ networks:
                 Documentation = "https://docs.portainer.io/"
             },
 
-            // ════════════════════════════════════════════════════════
-            // WORDPRESS
-            // ════════════════════════════════════════════════════════
             new AppTemplate
             {
                 Id = "wordpress",
@@ -336,9 +323,6 @@ networks:
                 Documentation = "https://hub.docker.com/_/wordpress"
             },
 
-            // ════════════════════════════════════════════════════════
-            // WHOAMI (Testing)
-            // ════════════════════════════════════════════════════════
             new AppTemplate
             {
                 Id = "whoami",

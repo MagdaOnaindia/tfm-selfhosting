@@ -4,13 +4,6 @@ namespace TFM.Dashboard.Interfaces;
 
 /// <summary>
 /// Gestiona el ciclo de vida completo de las aplicaciones desplegadas.
-/// 
-/// SOLID:
-/// - S: Solo gestión de aplicaciones
-/// - O: Extensible con diferentes fuentes de datos
-/// - L: Implementaciones intercambiables
-/// - I: Interface específica para aplicaciones
-/// - D: Componentes dependen de esta abstracción
 /// </summary>
 public interface IApplicationService
 {

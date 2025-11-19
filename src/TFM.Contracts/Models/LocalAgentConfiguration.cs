@@ -1,5 +1,4 @@
-﻿// src/TFM.Contracts/Models/LocalAgentConfiguration.cs
-namespace TFM.Contracts.Models;
+﻿namespace TFM.Contracts.Models;
 
 /// <summary>
 /// Configuración del Agente que se ejecuta en la torre local.

@@ -174,7 +174,7 @@ public class TunnelClient : ITunnelClient
         {
             await foreach (var message in stream.ReadAllAsync(cancellationToken))
             {
-                _logger.LogDebug("← Received {Type} message (ID: {MessageId})",
+                _logger.LogDebug("Received {Type} message (ID: {MessageId})",
                 message.Type, message.MessageId);
                 if (message.Type == MessageType.HttpRequest)
                 {
@@ -194,7 +194,7 @@ public class TunnelClient : ITunnelClient
                             HttpResponse = response
                         };
                         await writer.WriteAsync(responseMessage);
-                            _logger.LogInformation("→ Response sent for {RequestId} ({Time}ms)",
+                            _logger.LogInformation("Response sent for {RequestId} ({Time}ms)",
                                                     response.RequestId, response.ProcessingTimeMs);
                         }
                         catch (Exception ex)
@@ -263,7 +263,7 @@ public class TunnelClient : ITunnelClient
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "⚠️ Failed to send heartbeat");
+                _logger.LogWarning(ex, " Failed to send heartbeat");
             }
         }
         _logger.LogDebug(" Heartbeat task stopped");
@@ -295,7 +295,7 @@ public class TunnelClient : ITunnelClient
                 await writer.WriteAsync(response);
                 break;
             default:
-                _logger.LogWarning("⚠️ Unknown control command: {Command}", control.Command);
+                _logger.LogWarning(" Unknown control command: {Command}", control.Command);
                 break;
         }
     }

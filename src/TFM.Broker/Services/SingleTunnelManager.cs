@@ -1,5 +1,4 @@
-﻿// src/TFM.Broker/Services/SingleTunnelManager.cs
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Threading.Channels;
 using Grpc.Core;
 using TFM.Broker.Interfaces;
@@ -54,7 +53,7 @@ public class SingleTunnelManager : ITunnelManager
                 {
                     if (!IsValidMessage(message)) continue;
                             
-                    _logger.LogDebug("← Received {Type} message from {AgentId}", message.Type, agentId);
+                    _logger.LogDebug("Received {Type} message from {AgentId}", message.Type, agentId);
                     await _agentWriter.WriteAsync(message);
                 }
             }
@@ -105,7 +104,7 @@ public class SingleTunnelManager : ITunnelManager
             using var cts = new CancellationTokenSource(timeout);
             try
             {
-                return await tcs.Task.WaitAsync(cts.Token); // .NET 6+
+                return await tcs.Task.WaitAsync(cts.Token); 
             }
             catch (OperationCanceledException)
             {
@@ -145,7 +144,6 @@ public class SingleTunnelManager : ITunnelManager
     // Método auxiliar para validar mensajes
     private bool IsValidMessage(TunnelMessage message)
     {
-        //Validar timestamp (ventana de ±5 minutos)
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var skew = Math.Abs(now - message.Timestamp);
         if (skew > 300_000) // 5 minutos
@@ -161,7 +159,7 @@ public class SingleTunnelManager : ITunnelManager
             return false;
         }
 
-        // Limpiar cache antiguo (simple, para producción usar Redis con TTL)
+        // Limpiar cache antiguo
         _ = Task.Run(() =>
         {
             var expired = _recentMessageIds.Where(kvp => now - kvp.Value > MessageIdCacheDurationMs).ToList();

@@ -4,11 +4,6 @@ namespace TFM.Dashboard.Interfaces;
 
 /// <summary>
 /// Ejecuta playbooks de Ansible.
-/// 
-/// SOLID:
-/// - S: Solo ejecución de Ansible
-/// - O: Extensible con diferentes ejecutores
-/// - I: Interface específica para Ansible
 /// </summary>
 public interface IAnsibleService
 {

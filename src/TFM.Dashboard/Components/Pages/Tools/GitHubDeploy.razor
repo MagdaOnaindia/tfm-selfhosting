@@ -175,7 +175,7 @@
 
         try
         {
-            _deploymentOutput += "🚀 Iniciando deployment desde GitHub...\n\n";
+            _deploymentOutput += " Iniciando deployment desde GitHub...\n\n";
 
             // Verificar Ansible
             var ansibleInstalled = await AnsibleService.IsAnsibleInstalledAsync();
@@ -218,14 +218,14 @@
                 extraVars["github_token"] = _githubToken;
             }
 
-            _deploymentOutput += "📝 Generando playbook de Ansible...\n";
+            _deploymentOutput += " Generando playbook de Ansible...\n";
             var playbookPath = await AnsibleService.GeneratePlaybookAsync(template);
             _deploymentOutput += $"✓ Playbook generado: {playbookPath}\n\n";
 
             StateHasChanged();
 
             // Ejecutar playbook
-            _deploymentOutput += "⚙️ Ejecutando playbook de Ansible...\n\n";
+            _deploymentOutput += "⚙ Ejecutando playbook de Ansible...\n\n";
             var result = await AnsibleService.RunPlaybookAsync(
                 playbookPath, 
                 extraVars,
@@ -241,8 +241,8 @@
 
             if (result.Success)
             {
-                _deploymentOutput += $"\n✅ Deployment completado exitosamente en {result.Duration.TotalSeconds:F1}s\n";
-                Snackbar.Add("✅ Deployment exitoso", Severity.Success);
+                _deploymentOutput += $"\n Deployment completado exitosamente en {result.Duration.TotalSeconds:F1}s\n";
+                Snackbar.Add(" Deployment exitoso", Severity.Success);
 
                 // Crear registro de aplicación
                 var app = new Application
@@ -266,14 +266,14 @@
             }
             else
             {
-                _deploymentOutput += $"\n❌ Deployment falló con código {result.ExitCode}\n";
+                _deploymentOutput += $"\n Deployment falló con código {result.ExitCode}\n";
                 _deploymentOutput += $"Error: {result.Error}\n";
-                Snackbar.Add("❌ Deployment falló", Severity.Error);
+                Snackbar.Add(" Deployment falló", Severity.Error);
             }
         }
         catch (Exception ex)
         {
-            _deploymentOutput += $"\n❌ Error: {ex.Message}\n";
+            _deploymentOutput += $"\n Error: {ex.Message}\n";
             Snackbar.Add($"Error: {ex.Message}", Severity.Error);
         }
         finally

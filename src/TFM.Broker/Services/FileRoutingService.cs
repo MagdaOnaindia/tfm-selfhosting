@@ -1,7 +1,6 @@
-﻿// src/TFM.Broker/Services/FileRoutingService.cs
-using System.Text.Json;
+﻿using System.Text.Json;
 using TFM.Broker.Interfaces;
-using TFM.Contracts.Models; // Necesitarás crear este modelo
+using TFM.Contracts.Models;
 
 namespace TFM.Broker.Services;
 
@@ -25,7 +24,6 @@ public class FileRoutingService : IRoutingService
             _logger.LogDebug("Ruta encontrada para {Domain} -> Agente {AgentId}", domain, route.AgentId);
             return Task.FromResult<RouteInfo?>(new RouteInfo { AgentId = route.AgentId, TargetPort = route.TargetPort });
         }
-        // Aquí iría la lógica para wildcards, si la añades
         _logger.LogWarning("No se encontró ruta para el dominio {Domain}", domain);
         return Task.FromResult<RouteInfo?>(null);
     }

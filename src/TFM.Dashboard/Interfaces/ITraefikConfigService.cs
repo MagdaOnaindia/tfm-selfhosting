@@ -4,11 +4,6 @@ namespace TFM.Dashboard.Interfaces;
 
 /// <summary>
 /// Gestiona la configuración dinámica de Traefik.
-/// 
-/// SOLID:
-/// - S: Solo configuración de Traefik
-/// - O: Puede extenderse con diferentes backends
-/// - I: Interface específica para Traefik
 /// </summary>
 public interface ITraefikConfigService
 {

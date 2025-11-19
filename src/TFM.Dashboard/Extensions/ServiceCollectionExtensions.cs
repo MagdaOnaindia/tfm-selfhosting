@@ -6,9 +6,6 @@ namespace TFM.Dashboard.Extensions;
 /// <summary>
 /// Extensiones para configurar servicios del Dashboard.
 /// 
-/// SOLID:
-/// - S: Solo configuración de DI
-/// - O: Fácil agregar nuevos servicios
 /// </summary>
 public static class ServiceCollectionExtensions
 {

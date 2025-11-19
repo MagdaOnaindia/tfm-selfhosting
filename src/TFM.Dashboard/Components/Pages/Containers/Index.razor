@@ -9,7 +9,7 @@
 <PageTitle>Contenedores Docker - SelfHosting</PageTitle>
 
 <div class="d-flex justify-space-between align-center mb-4">
-    <MudText Typo="Typo.h4">🐳 Contenedores Docker</MudText>
+    <MudText Typo="Typo.h4">Contenedores Docker</MudText>
     <div>
         <MudSwitch T="bool" @bind-Checked="_showAll" Color="Color.Primary" Label="Mostrar todos" />
         <MudIconButton Icon="@Icons.Material.Filled.Refresh" 
@@ -111,7 +111,7 @@ else
 <!-- Dialog de Logs -->
 <MudDialog @bind-IsVisible="_showLogsDialog" Options="_dialogOptions">
     <TitleContent>
-        <MudText Typo="Typo.h6">📜 Logs - @_selectedContainerName</MudText>
+        <MudText Typo="Typo.h6">Logs - @_selectedContainerName</MudText>
     </TitleContent>
     <DialogContent>
         <MudPaper Class="pa-4" Style="background-color: #1e1e1e; color: #d4d4d4; max-height: 500px; overflow-y: auto; font-family: monospace;">

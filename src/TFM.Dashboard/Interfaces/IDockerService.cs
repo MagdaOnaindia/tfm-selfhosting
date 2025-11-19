@@ -5,10 +5,6 @@ namespace TFM.Dashboard.Interfaces;
 /// <summary>
 /// Abstracción para interactuar con Docker.
 /// 
-/// SOLID:
-/// - S: Solo operaciones de Docker
-/// - O: Puede tener implementaciones mock para testing
-/// - I: Interface específica para Docker
 /// </summary>
 public interface IDockerService
 {

@@ -7,10 +7,6 @@ namespace TFM.Dashboard.Services;
 
 /// <summary>
 /// Servicio para ejecutar playbooks de Ansible.
-/// 
-/// SOLID:
-/// - S: Solo ejecución de Ansible
-/// - D: Depende de IConfiguration y ILogger
 /// </summary>
 public class AnsibleService : IAnsibleService
 {
@@ -119,13 +115,13 @@ public class AnsibleService : IAnsibleService
             if (ansibleResult.Success)
             {
                 _logger.LogInformation(
-                    "✅ Playbook completed successfully in {Duration:F1}s",
+                    "Playbook completed successfully in {Duration:F1}s",
                     duration.TotalSeconds);
             }
             else
             {
                 _logger.LogError(
-                    "❌ Playbook failed with exit code {ExitCode}",
+                    "Playbook failed with exit code {ExitCode}",
                     result.ExitCode);
             }
 
@@ -158,7 +154,7 @@ public class AnsibleService : IAnsibleService
 
         await File.WriteAllTextAsync(playbookPath, content);
 
-        _logger.LogInformation("✅ Playbook generated: {Path}", playbookPath);
+        _logger.LogInformation("Playbook generated: {Path}", playbookPath);
 
         return playbookPath;
     }

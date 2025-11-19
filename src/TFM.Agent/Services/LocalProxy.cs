@@ -50,7 +50,7 @@ public class LocalProxy : ILocalProxy
                 Method = new HttpMethod(request.Method),
                 RequestUri = requestUri
             };
-            // ⚠️ CRÍTICO: Preservar Host header para Traefik routing
+            // Preservar Host header para Traefik routing
             httpRequest.Headers.Host = request.Host;
             // Copiar otros headers
             foreach (var header in request.Headers)

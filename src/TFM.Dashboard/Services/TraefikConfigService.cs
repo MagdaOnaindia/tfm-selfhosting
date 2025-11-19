@@ -8,10 +8,6 @@ namespace TFM.Dashboard.Services;
 
 /// <summary>
 /// Gestiona la configuración dinámica de Traefik mediante archivos YAML.
-/// 
-/// SOLID:
-/// - S: Solo gestión de configuración de Traefik
-/// - D: Depende de IConfiguration y ILogger
 /// </summary>
 public class TraefikConfigService : ITraefikConfigService
 {
@@ -48,8 +44,7 @@ public class TraefikConfigService : ITraefikConfigService
                     .WithNamingConvention(CamelCaseNamingConvention.Instance)
                     .Build();
 
-                // Parsear YAML de Traefik (simplificado)
-                // En producción, usar un modelo completo
+                //TODO: usar un modelo completo
                 var fileName = Path.GetFileNameWithoutExtension(file);
 
                 configs.Add(new DomainConfiguration
@@ -115,7 +110,7 @@ public class TraefikConfigService : ITraefikConfigService
             await File.WriteAllTextAsync(filePath, yaml);
 
             _logger.LogInformation(
-                "✅ Domain configuration added: {Domain} -> {Service}:{Port}",
+                " Domain configuration added: {Domain} -> {Service}:{Port}",
                 config.Domain, config.ServiceName, config.Port);
         }
         finally
@@ -136,7 +131,7 @@ public class TraefikConfigService : ITraefikConfigService
                 if (content.Contains(domain))
                 {
                     File.Delete(file);
-                    _logger.LogInformation("🗑️ Domain configuration removed: {Domain}", domain);
+                    _logger.LogInformation(" Domain configuration removed: {Domain}", domain);
                 }
             }
         }
@@ -154,8 +149,7 @@ public class TraefikConfigService : ITraefikConfigService
 
     public Task ReloadConfigAsync()
     {
-        // Traefik recarga automáticamente los archivos
-        _logger.LogInformation("🔄 Traefik will auto-reload configuration");
+        // se hace automáticamente
         return Task.CompletedTask;
     }
 

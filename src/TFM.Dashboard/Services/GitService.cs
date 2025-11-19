@@ -6,9 +6,6 @@ namespace TFM.Dashboard.Services;
 
 /// <summary>
 /// Servicio para operaciones con repositorios Git.
-/// 
-/// SOLID:
-/// - S: Solo operaciones Git
 /// </summary>
 public class GitService : IGitService
 {
@@ -26,7 +23,7 @@ public class GitService : IGitService
         string? token = null,
         string? branch = null)
     {
-        _logger.LogInformation("📥 Cloning repository: {Url}", repoUrl);
+        _logger.LogInformation("Cloning repository: {Url}", repoUrl);
 
         try
         {
@@ -51,12 +48,12 @@ public class GitService : IGitService
 
             await Task.Run(() => Repository.Clone(repoUrl, destinationPath, cloneOptions));
 
-            _logger.LogInformation("✅ Repository cloned to: {Path}", destinationPath);
+            _logger.LogInformation("Repository cloned to: {Path}", destinationPath);
             return destinationPath;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "❌ Failed to clone repository");
+            _logger.LogError(ex, " Failed to clone repository");
             throw;
         }
     }

@@ -4,11 +4,6 @@ namespace TFM.Dashboard.Interfaces;
 
 /// <summary>
 /// Proporciona templates predefinidos para aplicaciones.
-/// 
-/// SOLID:
-/// - S: Solo gestión de templates
-/// - O: Extensible con nuevos templates
-/// - I: Interface específica para templates
 /// </summary>
 public interface IAppTemplateService
 {

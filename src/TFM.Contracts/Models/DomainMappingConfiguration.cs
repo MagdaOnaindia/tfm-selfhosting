@@ -1,6 +1,4 @@
-﻿// src/TFM.Contracts/Models/DomainMappingConfiguration.cs
-using System.Collections.Generic;
-
+﻿
 namespace TFM.Contracts.Models;
 
 /// <summary>

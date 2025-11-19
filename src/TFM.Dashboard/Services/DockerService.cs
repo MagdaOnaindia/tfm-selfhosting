@@ -9,10 +9,7 @@ namespace TFM.Dashboard.Services;
 
 /// <summary>
 /// Implementación del servicio de Docker.
-/// 
-/// SOLID:
-/// - S: Solo operaciones de Docker
-/// - D: Depende de ILogger
+
 /// </summary>
 public class DockerService : IDockerService, IDisposable
 {
@@ -28,7 +25,7 @@ public class DockerService : IDockerService, IDisposable
         _client = new DockerClientConfiguration(new Uri(dockerUrl))
             .CreateClient();
 
-        _logger.LogInformation("🐳 Docker client initialized: {Url}", dockerUrl);
+        _logger.LogInformation(" Docker client initialized: {Url}", dockerUrl);
     }
 
     private static string DetectDockerUrl()
@@ -80,13 +77,13 @@ public class DockerService : IDockerService, IDisposable
 
     public async Task StartContainerAsync(string id)
     {
-        _logger.LogInformation("▶️ Starting container: {Id}", id);
+        _logger.LogInformation("Starting container: {Id}", id);
         await _client.Containers.StartContainerAsync(id, new ContainerStartParameters());
     }
 
     public async Task StopContainerAsync(string id)
     {
-        _logger.LogInformation("⏹️ Stopping container: {Id}", id);
+        _logger.LogInformation(" Stopping container: {Id}", id);
         await _client.Containers.StopContainerAsync(id, new ContainerStopParameters
         {
             WaitBeforeKillSeconds = 10
@@ -95,13 +92,13 @@ public class DockerService : IDockerService, IDisposable
 
     public async Task RestartContainerAsync(string id)
     {
-        _logger.LogInformation("🔄 Restarting container: {Id}", id);
+        _logger.LogInformation("Restarting container: {Id}", id);
         await _client.Containers.RestartContainerAsync(id, new ContainerRestartParameters());
     }
 
     public async Task RemoveContainerAsync(string id)
     {
-        _logger.LogWarning("🗑️ Removing container: {Id}", id);
+        _logger.LogWarning("Removing container: {Id}", id);
         await _client.Containers.RemoveContainerAsync(id, new ContainerRemoveParameters
         {
             Force = true
@@ -112,8 +109,7 @@ public class DockerService : IDockerService, IDisposable
     {
         try
         {
-            // Nota: Esta es una implementación simplificada
-            // En producción, deberías parsear el JSON completo de stats
+            // TODO: Prasear json completo de stats
             return new ContainerStats
             {
                 CpuPercent = 0,
@@ -171,7 +167,7 @@ public class DockerService : IDockerService, IDisposable
 
     public async Task<string> DeployComposeAsync(string composeFilePath, string projectName)
     {
-        _logger.LogInformation("🚀 Deploying compose project: {Project}", projectName);
+        _logger.LogInformation("Deploying compose project: {Project}", projectName);
 
         var result = await Cli.Wrap("docker")
             .WithArguments(new[]
@@ -190,13 +186,13 @@ public class DockerService : IDockerService, IDisposable
             throw new InvalidOperationException($"Deployment failed: {result.StandardError}");
         }
 
-        _logger.LogInformation("✅ Compose project deployed: {Project}", projectName);
+        _logger.LogInformation(" Compose project deployed: {Project}", projectName);
         return result.StandardOutput;
     }
 
     public async Task<string> StopComposeAsync(string composeFilePath, string projectName)
     {
-        _logger.LogInformation("⏹️ Stopping compose project: {Project}", projectName);
+        _logger.LogInformation("Stopping compose project: {Project}", projectName);
 
         var result = await Cli.Wrap("docker")
             .WithArguments(new[]
@@ -214,7 +210,7 @@ public class DockerService : IDockerService, IDisposable
 
     public async Task<string> RemoveComposeAsync(string composeFilePath, string projectName)
     {
-        _logger.LogInformation("🗑️ Removing compose project: {Project}", projectName);
+        _logger.LogInformation(" Removing compose project: {Project}", projectName);
 
         var result = await Cli.Wrap("docker")
             .WithArguments(new[]
@@ -223,7 +219,7 @@ public class DockerService : IDockerService, IDisposable
                 "-f", composeFilePath,
                 "-p", projectName,
                 "down",
-                "-v"  // También elimina volúmenes
+                "-v"  // También eliminar volúmenes
             })
             .WithValidation(CommandResultValidation.None)
             .ExecuteBufferedAsync();

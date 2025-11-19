@@ -2,10 +2,6 @@
 
 /// <summary>
 /// Operaciones con repositorios Git.
-/// 
-/// SOLID:
-/// - S: Solo operaciones Git
-/// - I: Interface específica para Git
 /// </summary>
 public interface IGitService
 {
