@@ -35,9 +35,10 @@ builder.WebHost.ConfigureKestrel(options =>
                 };
             });
         });
-        // Puerto HTTP para Caddy
-        options.ListenLocalhost(5000, o => o.Protocols = HttpProtocols.Http1);
-    });
+    // Puerto HTTP para Caddy
+    options.ListenLocalhost(5000, o => o.Protocols = HttpProtocols.Http1);
+    options.Limits.MaxRequestBodySize = 16 * 1024 * 1024; // 16 MB global
+});
 // ====================================
 // SERVICES
 // ====================================
@@ -63,6 +64,15 @@ app.MapPost("/proxy", async (
         {
             domain = context.Request.Host.Host;
         }
+
+        // AÑADIR VALIDACIÓN
+        if (!IsValidDomain(domain))
+        {
+            context.Response.StatusCode = 400;
+            await context.Response.WriteAsync("{\"error\": \"Invalid domain format\"}");
+            return;
+        }
+        
         // Buscar ruta
         var route = await routingService.GetRouteForDomainAsync(domain);
         if (route == null)
@@ -93,8 +103,39 @@ app.MapPost("/proxy", async (
         }
         if (context.Request.Body != null)
         {
+            const long maxBodySize = 16 * 1024 * 1024; // 16 MB --> evitar DoS por memoria
+
+            if (context.Request.ContentLength > maxBodySize)
+            {
+                context.Response.StatusCode = 413; // Payload Too Large
+                await context.Response.WriteAsync("{\"error\": \"Request body too large\"}");
+                return;
+            }
+
             using var ms = new MemoryStream();
-            await context.Request.Body.CopyToAsync(ms);
+            using var limitedStream = new StreamReader(
+                context.Request.Body,
+                System.Text.Encoding.UTF8,
+                detectEncodingFromByteOrderMarks: false,
+                bufferSize: 1024,
+                leaveOpen: false);
+
+            var buffer = new byte[8192];
+            int bytesRead;
+            long totalBytes = 0;
+
+            while ((bytesRead = await context.Request.Body.ReadAsync(buffer, 0, buffer.Length)) > 0)
+            {
+                totalBytes += bytesRead;
+                if (totalBytes > maxBodySize)
+                {
+                    context.Response.StatusCode = 413;
+                    await context.Response.WriteAsync("{\"error\": \"Request body too large\"}");
+                    return;
+                }
+                await ms.WriteAsync(buffer, 0, bytesRead);
+            }
+
             grpcRequest.Body = ByteString.CopyFrom(ms.ToArray());
         }
         try
@@ -119,18 +160,47 @@ app.MapPost("/proxy", async (
         }
         catch (Exception ex)
         {
+            // Loguear el error completo internamente
+            var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+            logger.LogError(ex, "Error procesando petición para {Domain}", domain);
+
             context.Response.StatusCode = 500;
-            await context.Response.WriteAsync($"{{\"error\": \"{ex.Message}\"}}");
+            await context.Response.WriteAsync("{\"error\": \"Internal server error\"}");
         }
     });
 
 app.MapGet("/health", () => "Broker OK");
 
-// Endpoint para recargar configuración
-app.MapPost("/admin/reload-routes", async (IRoutingService routingService) =>
+// Middleware de autenticación para endpoints admin
+var adminApiKey = builder.Configuration["Security:AdminApiKey"]
+    ?? throw new InvalidOperationException("AdminApiKey no configurada");
+
+app.MapPost("/admin/reload-routes", async (HttpContext context, IRoutingService routingService) =>
 {
+    // Validar API Key
+    if (!context.Request.Headers.TryGetValue("X-API-Key", out var apiKey) || apiKey != adminApiKey)
+    {
+        context.Response.StatusCode = 401;
+        await context.Response.WriteAsync("{\"error\": \"Unauthorized\"}");
+        return Results.Unauthorized();
+        
+    }
+
     await routingService.ReloadRoutesAsync();
     return Results.Ok(new { message = "Routes reloaded" });
 });
+
+bool IsValidDomain(string domain)
+{
+    if (string.IsNullOrWhiteSpace(domain) || domain.Length > 253)
+        return false;
+
+    // RFC 1123 - solo letras, números, puntos y guiones
+    return System.Text.RegularExpressions.Regex.IsMatch(
+        domain,
+        @"^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase
+    );
+}
 
 app.Run();

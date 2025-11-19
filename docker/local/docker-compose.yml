@@ -1,54 +1,33 @@
 version: '3.8'
+
 services:
-# ============================================
-# TRAEFIK
-# ============================================
-traefik:
-image: traefik:v2.10
-container_name: selfhosting-traefik
-restart: unless-stopped
-ports:
-- "80:80" # HTTP (interno)
-- "8080:8080" # Dashboard
-command:
-- "--api.dashboard=true"
-- "--api.insecure=true"
-- "--providers.docker=true"
-- "--providers.docker.exposedbydefault=false"
-- "--providers.docker.network=selfhosting"
-- "--entrypoints.web.address=:80"
-- "--log.level=INFO"
-- "--accesslog=true"
-- "--metrics.prometheus=true"
-volumes:
-- /var/run/docker.sock:/var/run/docker.sock:ro
-- traefik_config:/etc/traefik
+    agent:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        container_name: selfhosting-agent
+        restart: unless-stopped
+
+        environment:
+            - DOTNET_ENVIRONMENT=Production
+            - AGENT_CERT_PASSWORD=${AGENT_CERT_PASSWORD} # Desde .env
+
+        volumes:
+            - /opt/selfhosting/certs:/opt/selfhosting/certs:ro
+            - ./logs:/app/logs
+
+        networks:
+            - agent-network
+
+        # Seguridad del contenedor
+        security_opt:
+            - no-new-privileges:true
+        cap_drop:
+            - ALL
+        read_only: true
+        tmpfs:
+            - /tmp:noexec,nosuid,size=50M
+
 networks:
-- selfhosting
-labels:
-- "traefik.enable=true"
-- "traefik.http.routers.traefik.rule=Host(`traefik.localhost`)"
-- "traefik.http.routers.traefik.service=api@internal"
-# ============================================
-# WHOAMI (test service)
-# ============================================
-whoami:
-image: traefik/whoami
-container_name: selfhosting-whoami
-restart: unless-stopped
-networks:
-- selfhosting
-labels:
-- "traefik.enable=true"
-- "traefik.http.routers.whoami.rule=Host(`whoami.ejemplo.com`)"
-- "traefik.http.routers.whoami.entrypoints=web"
-- "traefik.http.services.whoami.loadbalancer.server.port=80"
-- "selfhosting.app.name=whoami"
-- "selfhosting.app.type=test"
-- "selfhosting.app.domain=whoami.ejemplo.com"
-volumes:
-traefik_config:
-networks:
-selfhosting:
-name: selfhosting
-driver: bridge
+    agent-network:
+        driver: bridge

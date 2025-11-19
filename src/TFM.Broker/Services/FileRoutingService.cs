@@ -37,12 +37,60 @@ public class FileRoutingService : IRoutingService
             _logger.LogWarning("Archivo de configuración de rutas no encontrado en: {Path}", _configPath);
             return;
         }
-        var json = await File.ReadAllTextAsync(_configPath);
-        var config = JsonSerializer.Deserialize<DomainMappingConfiguration>(json);
-        if (config != null)
+        try
         {
+            var json = await File.ReadAllTextAsync(_configPath);
+
+            var options = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                AllowTrailingCommas = true,
+                ReadCommentHandling = JsonCommentHandling.Skip
+            };
+
+            var config = JsonSerializer.Deserialize<DomainMappingConfiguration>(json, options);
+
+            if (config?.Routes == null)
+            {
+                _logger.LogError("SECURITY: Invalid configuration - Routes is null");
+                return;
+            }
+
+            // Validar cada ruta
+            var validRoutes = new Dictionary<string, DomainRoute>();
+            foreach (var (domain, route) in config.Routes)
+            {
+                if (string.IsNullOrWhiteSpace(domain) || string.IsNullOrWhiteSpace(route.AgentId))
+                {
+                    _logger.LogWarning("SECURITY: Ruta inválida ignorada - Domain: {Domain}", domain);
+                    continue;
+                }
+
+                // Validar formato de dominio
+                if (!System.Text.RegularExpressions.Regex.IsMatch(
+                    domain,
+                    @"^(\*\.)?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                {
+                    _logger.LogWarning("SECURITY: Formato de dominio inválido ignorado: {Domain}", domain);
+                    continue;
+                }
+
+                validRoutes[domain] = route;
+            }
+
+            config.Routes = validRoutes;
             _config = config;
-            _logger.LogInformation("{Count} rutas cargadas desde {Path}", _config.Routes.Count, _configPath);
+            _logger.LogInformation("{Count} rutas válidas cargadas desde {Path}", _config.Routes.Count, _configPath);
         }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "SECURITY: Error parseando JSON de configuración");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "SECURITY: Error leyendo archivo de configuración");
+        }
+        
     }
 }

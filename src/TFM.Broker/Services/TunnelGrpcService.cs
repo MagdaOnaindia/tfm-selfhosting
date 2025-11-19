@@ -23,12 +23,21 @@ ServerCallContext context)
         .FirstOrDefault(p => p.Name == "x509_common_name")?.Value;
         if (string.IsNullOrEmpty(agentId))
         {
-            _logger.LogError("Client certificate missing CN");
+            _logger.LogWarning(
+                "SECURITY: Authentication failed - Missing CN in certificate, IP: {IpAddress}",
+                context.Peer
+            );
             throw new RpcException(new Status(StatusCode.Unauthenticated, "Invalid client certificate"));
         }
         _logger.LogInformation("￿ Tunnel request from: {AgentId}", agentId);
         try
         {
+            _logger.LogInformation(
+                "SECURITY: Agent authenticated - AgentId: {AgentId}, IP: {IpAddress}, Timestamp: {Timestamp}",
+                agentId,
+                context.Peer, // Dirección IP del cliente
+                DateTimeOffset.UtcNow
+            );
             // Registrar conexión
             await _tunnelManager.RegisterAgentAsync(agentId, responseStream, context.CancellationToken);
             // Leer mensajes del agente

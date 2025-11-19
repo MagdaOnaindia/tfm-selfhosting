@@ -6,6 +6,11 @@ builder.Configuration
 .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
 .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true)
 .AddEnvironmentVariables();
+// Permitir override de password por variable de entorno
+if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("AGENT_CERT_PASSWORD")))
+{
+    builder.Configuration["Agent:CertificatePassword"] = Environment.GetEnvironmentVariable("AGENT_CERT_PASSWORD");
+}
 // Logging
 builder.Logging.AddConsole();
 builder.Logging.AddDebug();

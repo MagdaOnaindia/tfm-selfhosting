@@ -1,0 +1,1 @@
+Ejecutar primero el script que genera los secrets. Los guarda en un .env que luego usa para firmar los certificados. Docker luego accede a los .env para obtener las variables de entorno de forma segura

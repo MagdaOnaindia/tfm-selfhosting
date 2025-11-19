@@ -13,12 +13,16 @@ public class SingleTunnelManager : ITunnelManager
 {
     private readonly ILogger<SingleTunnelManager> _logger;
     private readonly ConcurrentDictionary<string, TaskCompletionSource<HttpResponse>> _pendingRequests = new();
+    private readonly ConcurrentDictionary<string, long> _recentMessageIds = new();
+    private const long MessageIdCacheDurationMs = 600_000; // 10 minutos
+
 
     // Variables específicas para single-tenant
     private string? _currentAgentId;
     private IServerStreamWriter<TunnelMessage>? _agentWriter;
     private Channel<TunnelMessage>? _messageChannel;
     private CancellationToken _agentCancellationToken;
+
 
     public SingleTunnelManager(ILogger<SingleTunnelManager> logger)
     {
@@ -45,8 +49,12 @@ public class SingleTunnelManager : ITunnelManager
         {
             try
             {
+                    
                 await foreach (var message in _messageChannel.Reader.ReadAllAsync(cancellationToken))
                 {
+                    if (!IsValidMessage(message)) continue;
+                            
+                    _logger.LogDebug("← Received {Type} message from {AgentId}", message.Type, agentId);
                     await _agentWriter.WriteAsync(message);
                 }
             }
@@ -94,17 +102,14 @@ public class SingleTunnelManager : ITunnelManager
             await _messageChannel.Writer.WriteAsync(message);
             _logger.LogInformation("Petición {RequestId} enviada al agente.", request.RequestId);
 
-            // Esperar la respuesta con timeout
             using var cts = new CancellationTokenSource(timeout);
-            var completedTask = await Task.WhenAny(tcs.Task, Task.Delay(Timeout.Infinite, cts.Token));
-
-            if (completedTask == tcs.Task)
+            try
             {
-                return await tcs.Task;
+                return await tcs.Task.WaitAsync(cts.Token); // .NET 6+
             }
-            else
+            catch (OperationCanceledException)
             {
-                throw new TimeoutException($"La petición {request.RequestId} ha expirado.");
+                throw new TimeoutException($"La petición {request.RequestId} ha expirado tras {timeout.TotalSeconds}s.");
             }
         }
         finally
@@ -136,4 +141,37 @@ public class SingleTunnelManager : ITunnelManager
 
         return Task.CompletedTask;
     }
+
+    // Método auxiliar para validar mensajes
+    private bool IsValidMessage(TunnelMessage message)
+    {
+        //Validar timestamp (ventana de ±5 minutos)
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var skew = Math.Abs(now - message.Timestamp);
+        if (skew > 300_000) // 5 minutos
+        {
+            _logger.LogWarning("SECURITY: Message rejected - Timestamp fuera de ventana: {MessageId}", message.MessageId);
+            return false;
+        }
+
+        //Verificar message_id duplicado (protección anti-replay)
+        if (!_recentMessageIds.TryAdd(message.MessageId, now))
+        {
+            _logger.LogWarning("SECURITY: Message rejected - Duplicate message_id: {MessageId}", message.MessageId);
+            return false;
+        }
+
+        // Limpiar cache antiguo (simple, para producción usar Redis con TTL)
+        _ = Task.Run(() =>
+        {
+            var expired = _recentMessageIds.Where(kvp => now - kvp.Value > MessageIdCacheDurationMs).ToList();
+            foreach (var item in expired)
+            {
+                _recentMessageIds.TryRemove(item.Key, out _);
+            }
+        });
+
+        return true;
+    }
+
 }

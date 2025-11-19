@@ -41,10 +41,10 @@ public class TunnelClient : ITunnelClient
         ?? throw new InvalidOperationException("Agent:CaCertPath not configured");
 
         _logger.LogInformation("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        _logger.LogInformation("􀀀 Starting SelfHosting Agent");
+        _logger.LogInformation(" Starting SelfHosting Agent");
         _logger.LogInformation("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        _logger.LogInformation("􀀀 Agent ID: {AgentId}", agentId);
-        _logger.LogInformation("􀀀 Broker URL: {BrokerUrl}", brokerUrl);
+        _logger.LogInformation(" Agent ID: {AgentId}", agentId);
+        _logger.LogInformation(" Broker URL: {BrokerUrl}", brokerUrl);
 
         // Verificar que los archivos existen
         if (!File.Exists(certPath))
@@ -64,16 +64,16 @@ public class TunnelClient : ITunnelClient
         {
             clientCert = new X509Certificate2(certPath, certPassword);
             caCert = new X509Certificate2(caCertPath);
-            _logger.LogInformation("􀀀 Client certificate loaded");
+            _logger.LogInformation(" Client certificate loaded");
             _logger.LogInformation(" Subject: {Subject}", clientCert.Subject);
             _logger.LogInformation(" Valid from: {NotBefore}", clientCert.NotBefore);
             _logger.LogInformation(" Valid until: {NotAfter}", clientCert.NotAfter);
-            _logger.LogInformation("􀀀 CA certificate loaded");
+            _logger.LogInformation(" CA certificate loaded");
             _logger.LogInformation(" Subject: {Subject}", caCert.Subject);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "􀀀 Failed to load certificates");
+            _logger.LogError(ex, " Failed to load certificates");
             throw;
         }
 
@@ -84,7 +84,7 @@ public class TunnelClient : ITunnelClient
         {
             if (cert == null)
             {
-                _logger.LogError("􀀀 Server certificate is null");
+                _logger.LogError(" Server certificate is null");
                 return false;
             }
             // Construir cadena de certificados
@@ -96,7 +96,7 @@ public class TunnelClient : ITunnelClient
             bool isValid = chain2.Build(cert);
             if (!isValid)
             {
-                _logger.LogError("􀀀 Server certificate chain validation failed");
+                _logger.LogError(" Server certificate chain validation failed");
                 foreach (var status in chain2.ChainStatus)
                 {
                     _logger.LogError(" {Status}: {StatusInformation}",
@@ -108,12 +108,12 @@ public class TunnelClient : ITunnelClient
             var root = chain2.ChainElements[^1].Certificate;
             if (root.Thumbprint != caCert.Thumbprint)
             {
-                _logger.LogError("􀀀 CA thumbprint mismatch");
+                _logger.LogError(" CA thumbprint mismatch");
                 _logger.LogError(" Expected: {Expected}", caCert.Thumbprint);
                 _logger.LogError(" Got: {Got}", root.Thumbprint);
                 return false;
             }
-            _logger.LogInformation("􀀀 Server certificate validated successfully");
+            _logger.LogInformation(" Server certificate validated successfully");
             return true;
         };
 
@@ -128,7 +128,7 @@ public class TunnelClient : ITunnelClient
         var channel = GrpcChannel.ForAddress(brokerUrl, channelOptions);
         var client = new TunnelService.TunnelServiceClient(channel);
         // Test de conectividad con Ping
-        _logger.LogInformation("􀀀 Testing connection with ping...");
+        _logger.LogInformation(" Testing connection with ping...");
 
         try
         {
@@ -141,22 +141,22 @@ public class TunnelClient : ITunnelClient
                                     deadline: DateTime.UtcNow.AddSeconds(5),
                                     cancellationToken: cancellationToken);
             var latency = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - pingResponse.Timestamp;
-            _logger.LogInformation("􀀀 Ping successful");
+            _logger.LogInformation(" Ping successful");
             _logger.LogInformation(" Server version: {Version}", pingResponse.ServerVersion);
             _logger.LogInformation(" Latency: {Latency}ms", latency);
         }
         catch (RpcException ex)
         {
-            _logger.LogError("􀀀 Ping failed: {Status} - {Detail}", ex.Status.StatusCode, ex.Status.Detail);
+            _logger.LogError(" Ping failed: {Status} - {Detail}", ex.Status.StatusCode, ex.Status.Detail);
             throw;
         }
 
         // Establecer túnel bidireccional
-        _logger.LogInformation("􀀀 Establishing bidirectional tunnel...");
+        _logger.LogInformation(" Establishing bidirectional tunnel...");
         var tunnel = client.EstablishTunnel(cancellationToken: cancellationToken);
-        _logger.LogInformation("􀀀 Tunnel established successfully");
+        _logger.LogInformation(" Tunnel established successfully");
         _logger.LogInformation("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        _logger.LogInformation("􀀀 Agent is ONLINE and ready to receive requests");
+        _logger.LogInformation(" Agent is ONLINE and ready to receive requests");
         _logger.LogInformation("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         // Tareas concurrentes
         var readTask = ReadMessagesAsync(tunnel.ResponseStream, tunnel.RequestStream, cancellationToken);
@@ -199,7 +199,7 @@ public class TunnelClient : ITunnelClient
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogError(ex, "􀀀 Error handling request {RequestId}",
+                            _logger.LogError(ex, " Error handling request {RequestId}",
                             message.HttpRequest.RequestId);
                             // Enviar error response
                             var errorResponse = CreateErrorResponse(
@@ -219,7 +219,7 @@ public class TunnelClient : ITunnelClient
                 }
                 else if (message.Type == MessageType.Control)
                 {
-                    _logger.LogInformation("􀀀 Control message received: {Command}",
+                    _logger.LogInformation(" Control message received: {Command}",
                     message.Control.Command);
                     await HandleControlMessageAsync(message.Control, writer);
                 }
@@ -231,7 +231,7 @@ public class TunnelClient : ITunnelClient
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "􀀀 Error reading messages from tunnel");
+            _logger.LogError(ex, " Error reading messages from tunnel");
             throw;
         }
     }
@@ -241,7 +241,7 @@ public class TunnelClient : ITunnelClient
         CancellationToken cancellationToken)
     {
         var heartbeatInterval = _configuration.GetValue<int>("Agent:HeartbeatIntervalSeconds", 30);
-        _logger.LogDebug("􀀀 Starting heartbeat task (interval: {Interval}s)", heartbeatInterval);
+        _logger.LogDebug(" Starting heartbeat task (interval: {Interval}s)", heartbeatInterval);
         while (!cancellationToken.IsCancellationRequested)
         {
             await Task.Delay(TimeSpan.FromSeconds(heartbeatInterval), cancellationToken);
@@ -254,7 +254,7 @@ public class TunnelClient : ITunnelClient
                     Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
                 };
                 await writer.WriteAsync(heartbeat);
-                _logger.LogDebug("􀀀 Heartbeat sent");
+                _logger.LogDebug(" Heartbeat sent");
             }
             catch (OperationCanceledException)
             {
@@ -266,7 +266,7 @@ public class TunnelClient : ITunnelClient
                 _logger.LogWarning(ex, "⚠️ Failed to send heartbeat");
             }
         }
-        _logger.LogDebug("􀀀 Heartbeat task stopped");
+        _logger.LogDebug(" Heartbeat task stopped");
     }
 
     private async Task HandleControlMessageAsync(
@@ -276,11 +276,11 @@ public class TunnelClient : ITunnelClient
         switch (control.Command)
         {
             case "reload_config":
-                _logger.LogInformation("􀀀 Reloading configuration...");
+                _logger.LogInformation(" Reloading configuration...");
                 // TODO: Implementar recarga de configuración
                 break;
             case "health_check":
-                _logger.LogDebug("􀀀 Health check requested");
+                _logger.LogDebug(" Health check requested");
                 var response = new TunnelMessage
                 {
                     MessageId = Guid.NewGuid().ToString(),

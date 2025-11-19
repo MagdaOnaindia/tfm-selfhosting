@@ -38,7 +38,7 @@ public class LocalProxy : ILocalProxy
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         try
         {
-            _logger.LogInformation("􀀀 {Method} {Host}{Path}",
+            _logger.LogInformation(" {Method} {Host}{Path}",
             request.Method, request.Host, request.Path);
             // URL de Traefik local
             var traefikUrl = _configuration["Agent:TraefikUrl"] ?? "http://localhost:80";
@@ -127,14 +127,14 @@ public class LocalProxy : ILocalProxy
             // Copiar body
             var bodyBytes = await httpResponse.Content.ReadAsByteArrayAsync();
             response.Body = ByteString.CopyFrom(bodyBytes);
-            _logger.LogInformation("􀀀 {Method} {Host}{Path} → {StatusCode} ({Size} bytes, {Time}ms)",
+            _logger.LogInformation(" {Method} {Host}{Path} → {StatusCode} ({Size} bytes, {Time}ms)",
             request.Method, request.Host, request.Path,
             response.StatusCode, bodyBytes.Length, response.ProcessingTimeMs);
             return response;
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "􀀀 HTTP request error connecting to Traefik");
+            _logger.LogError(ex, " HTTP request error connecting to Traefik");
             _logger.LogError(" Make sure Traefik is running on {TraefikUrl}",
             _configuration["Agent:TraefikUrl"]);
             return CreateErrorResponse(request.RequestId, 502,
@@ -142,13 +142,13 @@ public class LocalProxy : ILocalProxy
         }
         catch (TaskCanceledException ex)
         {
-            _logger.LogError(ex, "􀀀 Request timeout");
+            _logger.LogError(ex, " Request timeout");
             return CreateErrorResponse(request.RequestId, 504,
             "Gateway Timeout - Local service took too long to respond");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "􀀀 Unexpected error processing request");
+            _logger.LogError(ex, " Unexpected error processing request");
             return CreateErrorResponse(request.RequestId, 500,
             "Internal Server Error");
         }
