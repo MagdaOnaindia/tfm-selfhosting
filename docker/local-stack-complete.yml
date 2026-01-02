@@ -23,8 +23,8 @@ services:
   # --- Agent: El cliente que conecta con el Broker ---
   agent:
     build:
-      context: ../src/TFM.Agent  # El contexto es la carpeta del proyecto del Agente
-      dockerfile: Dockerfile     # El Dockerfile está DENTRO de esa carpeta de contexto
+      context: ../src # El contexto es la carpeta del proyecto del Agente
+      dockerfile: TFM.Agent/Dockerfile     # El Dockerfile está DENTRO de esa carpeta de contexto
     container_name: selfhosting-agent
     restart: unless-stopped
     volumes:
@@ -41,8 +41,8 @@ services:
   # --- Dashboard: La interfaz web de gestión ---
   dashboard:
     build:
-      context: ../src/TFM.Dashboard # El contexto es la carpeta del proyecto del Dashboard
-      dockerfile: Dockerfile     # El Dockerfile está DENTRO de esa carpeta de contexto
+      context: ../src  # <-- La carpeta 'src'
+      dockerfile: TFM.Dashboard/Dockerfile # <-- Ruta al Dockerfile DESDE 'src'
     container_name: selfhosting-dashboard
     restart: unless-stopped
     ports:
