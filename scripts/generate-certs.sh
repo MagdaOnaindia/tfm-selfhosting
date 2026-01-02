@@ -53,7 +53,6 @@ chmod 644 $CERT_DIR/*.crt
 
 # Cleanup
 rm -f $CERT_DIR/*.csr $CERT_DIR/*.srl
-
 echo "✅ Certificados generados con contraseña segura"
 echo ""
 echo "Archivos creados en $CERT_DIR/:"
