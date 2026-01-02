@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  # --- Traefik: Reverse Proxy Local ---
+  traefik:
+    image: traefik:v2.10
+    container_name: selfhosting-traefik
+    restart: unless-stopped
+    command:
+      - "--api.insecure=true" # Habilita el dashboard en el puerto 8080 (solo para acceso local)
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false" # Requiere que los contenedores tengan una label para ser expuestos
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"       # Puerto HTTP para las aplicaciones
+      - "8080:8080"   # Puerto para el dashboard de Traefik
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro # Permite a Traefik escuchar eventos de Docker
+      - /opt/selfhosting/traefik/dynamic:/etc/traefik/dynamic:ro
+    networks:
+      - selfhosting-net
+
+  # --- Agent: El cliente que conecta con el Broker ---
+  agent:
+    build:
+      context: ../src/TFM.Agent
+      dockerfile: Dockerfile
+    container_name: selfhosting-agent
+    restart: unless-stopped
+    volumes:
+      - /opt/selfhosting/certs:/opt/selfhosting/certs:ro
+      - /opt/selfhosting/config:/opt/selfhosting/config:ro
+    environment:
+      - DOTNET_ENVIRONMENT=Production
+      - AGENT_CERT_PASSWORD=${CERT_PASSWORD} # Leída del .env en esta misma carpeta
+    networks:
+      - selfhosting-net
+    depends_on:
+      - traefik
+
+  # --- Dashboard: La interfaz web de gestión ---
+  dashboard:
+    build:
+      context: ../src/TFM.Dashboard
+      dockerfile: Dockerfile
+    container_name: selfhosting-dashboard
+    restart: unless-stopped
+    ports:
+      - "5500:80" # Expone el puerto 80 del contenedor en el puerto 5500 del host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /opt/selfhosting/data:/app/data
+      - /opt/selfhosting/apps:/app/apps
+      - /opt/selfhosting/traefik/dynamic:/app/traefik/dynamic
+    networks:
+      - selfhosting-net
+
+networks:
+  selfhosting-net:
+    driver: bridge
