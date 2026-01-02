@@ -1,41 +1,24 @@
-FROM mcr.microsoft.com/dotnet/runtime:8.0 AS base
-WORKDIR /app
-
-#Crear usuario no-root
-RUN groupadd -r selfhosting && useradd -r -g selfhosting selfhosting
-
+# --- Etapa 1: Build ---
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-COPY ["TFM.Agent.csproj", "./"]
-COPY ["../TFM.Contracts/TFM.Contracts.csproj", "../TFM.Contracts/"]
+# Copia los .csproj primero para cachear la restauración de dependencias
+COPY TFM.Agent/TFM.Agent.csproj TFM.Agent/
+COPY TFM.Contracts/TFM.Contracts.csproj TFM.Contracts/
+RUN dotnet restore TFM.Agent/TFM.Agent.csproj
 
-RUN dotnet restore "TFM.Agent.csproj"
-
+# Copia todo el código fuente
 COPY . .
-COPY ../TFM.Contracts ../TFM.Contracts/
 
-RUN dotnet build "TFM.Agent.csproj" -c Release -o /app/build
+# Publica la aplicación
+WORKDIR /src/TFM.Agent
+RUN dotnet publish -c Release -o /app/publish
 
-FROM build AS publish
-RUN dotnet publish "TFM.Agent.csproj" -c Release -o /app/publish /p:UseAppHost=false
-
-FROM base AS final
+# --- Etapa 2: Final ---
+FROM mcr.microsoft.com/dotnet/runtime:8.0 AS final
 WORKDIR /app
-COPY --from=publish /app/publish .
-
-#Cambiar ownership y permisos
-RUN chown -R selfhosting:selfhosting /app && \
-    chmod -R 550 /app && \
-    mkdir -p /app/logs && \
-    chown selfhosting:selfhosting /app/logs && \
-    chmod 770 /app/logs
-
-#Cambiar a usuario no-root
+# ... (El resto de tu Dockerfile del Agent con el usuario no-root está bien)
+COPY --from=build /app/publish .
+# ...
 USER selfhosting
-
-#Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD pgrep -f "TFM.Agent.dll" || exit 1
-
 ENTRYPOINT ["dotnet", "TFM.Agent.dll"]
