@@ -1,16 +1,19 @@
-# --- Etapa 1: Build ---
-# Usamos la imagen del SDK de .NET para compilar la aplicación
+FROM mcr.microsoft.com/dotnet/runtime:8.0 AS base
+WORKDIR /app
+
+#Crear usuario no-root
+RUN groupadd -r selfhosting && useradd -r -g selfhosting selfhosting
+
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-# Copia los archivos .csproj primero para restaurar las dependencias.
-# Esto aprovecha el cacheo de Docker: solo se re-ejecuta si los proyectos (.csproj) cambian.
-COPY ["TFM.Dashboard/TFM.Dashboard.csproj", "TFM.Dashboard/"]
-COPY ["TFM.Contracts/TFM.Contracts.csproj", "TFM.Contracts/"]
-RUN dotnet restore "TFM.Dashboard/TFM.Dashboard.csproj"
+COPY ["TFM.Dashboard.csproj", "./"]
+COPY ["../TFM.Contracts/TFM.Contracts.csproj", "../TFM.Contracts/"]
 
-# Copia todo el resto del código fuente
+RUN dotnet restore "TFM.Dashboard.csproj"
+
 COPY . .
+COPY ../TFM.Contracts ../TFM.Contracts/
 
 # Publica la aplicación en modo Release
 WORKDIR "/src/TFM.Dashboard"
