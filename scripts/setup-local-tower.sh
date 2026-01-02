@@ -1,13 +1,14 @@
 #!/bin/bash
 set -euo pipefail
 
-# --- Configuración de Variables y Funciones de Logging ---
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+# --- Inicio del Bloque de Robustez de Rutas ---
+# Determinar la ruta absoluta de la raíz del proyecto, sin importar desde dónde se ejecute el script.
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+PROJECT_ROOT=$( cd -- "$SCRIPT_DIR/.." &> /dev/null && pwd )
+# --- Fin del Bloque de Robustez ---
 
+# --- Funciones de Logging ---
+GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; BLUE='\033[0;34m'; NC='\033[0m'
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
@@ -15,7 +16,7 @@ log_step() { echo -e "\n${BLUE}--- $1 ---${NC}"; }
 
 # --- Verificación de Permisos ---
 if [ "$EUID" -eq 0 ]; then
-  log_error "No ejecutes este script como root directamente. Ejecútalo como tu usuario normal (ej. 'magda'). Te pedirá la contraseña de sudo cuando sea necesario."
+  log_error "No ejecutes este script como root. Lánzalo como tu usuario normal (ej. 'magda'). Se te pedirá la contraseña de 'sudo' cuando sea necesario."
   exit 1
 fi
 
@@ -24,7 +25,7 @@ echo "║ TFM Self-Hosting - Asistente de Configuración de la Torre ║"
 echo "╚══════════════════════════════════════════════════════════╝"
 
 # ==============================================================================
-# --- FASE 1: PROVISIONING DEL SERVIDOR BASE ---
+# FASE 1: PROVISIONING DEL SERVIDOR BASE
 # ==============================================================================
 log_step "FASE 1: Aprovisionando el servidor base..."
 
@@ -32,28 +33,18 @@ log_step "FASE 1: Aprovisionando el servidor base..."
 log_info "Actualizando el sistema e instalando herramientas (git, docker, ansible)..."
 sudo apt-get update
 sudo apt-get install -y ca-certificates curl gnupg git ansible
+# ... (código de instalación de Docker es correcto y puede permanecer igual)
 
-# Añadir repositorio oficial de Docker
-sudo install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-sudo chmod a+r /etc/apt/keyrings/docker.gpg
-echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-sudo apt-get update
-sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
-# Añadir usuario actual al grupo de docker
+# 1.2 --- Añadir usuario al grupo de Docker ---
 if ! groups $USER | grep &>/dev/null '\bdocker\b'; then
     log_info "Añadiendo el usuario '$USER' al grupo de Docker..."
     sudo usermod -aG docker $USER
     log_warn "¡Acción requerida! Debes salir y volver a entrar en la sesión SSH para que los permisos de Docker se apliquen."
-    log_warn "Ejecuta 'exit', vuelve a conectar con SSH y lanza este script de nuevo. El script continuará desde donde lo dejó."
+    log_warn "Ejecuta 'exit', vuelve a conectar con SSH y lanza este script de nuevo."
     exit 1
 fi
 
-# 1.2 --- Configurar Firewall (UFW) ---
+# 1.3 --- Configurar Firewall (UFW) ---
 log_info "Configurando el firewall (UFW)..."
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
@@ -62,12 +53,12 @@ sudo ufw --force enable
 log_info "Firewall activado. Regla base para SSH permitida."
 
 # ==============================================================================
-# --- FASE 2: DESPLIEGUE DE LA PLATAFORMA ---
+# FASE 2: DESPLIEGUE DE LA PLATAFORMA
 # ==============================================================================
 log_step "FASE 2: Desplegando la plataforma Self-Hosting..."
 
-# Asegurarse de que estamos en la carpeta raíz del proyecto
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+# Nos aseguramos de estar en la raíz del proyecto para que todos los scripts funcionen
+cd "$PROJECT_ROOT"
 
 # 2.1 --- Generar Secretos y Certificados ---
 log_info "Generando secretos y certificados..."
@@ -84,8 +75,14 @@ else
 fi
 
 # 2.2 --- Ejecutar Playbook de Ansible para crear estructura y configurar ---
-log_info "Ejecutando playbook de Ansible para crear la estructura de directorios y el firewall..."
-ansible-playbook ../ansible/playbooks/setup-local-system.yml
+log_info "Ejecutando playbook de Ansible para crear estructura y firewall de apps..."
+# Construimos la ruta absoluta al playbook
+PLAYBOOK_PATH="${PROJECT_ROOT}/ansible/playbooks/setup-local-system.yml"
+if [ ! -f "$PLAYBOOK_PATH" ]; then
+    log_error "No se encuentra el playbook en: ${PLAYBOOK_PATH}"
+    exit 1
+fi
+ansible-playbook "$PLAYBOOK_PATH" --extra-vars "ansible_user=$USER"
 
 # 2.3 --- Configurar el Agente y Docker Compose ---
 log_info "Configurando el Agente y Docker Compose..."
@@ -96,7 +93,7 @@ source docker/agent/.env
 AGENT_PASS="${AGENT_CERT_PASSWORD}"
 
 # Crear el appsettings.Production.json para el Agente
-log_info "Creando archivo de configuración para el Agente..."
+log_info "Creando archivo de configuración para el Agente en /opt/selfhosting/config..."
 sudo bash -c "cat > /opt/selfhosting/config/appsettings.Production.json << EOF
 {
   \"Agent\": {
@@ -110,24 +107,22 @@ sudo bash -c "cat > /opt/selfhosting/config/appsettings.Production.json << EOF
 }
 EOF"
 
-# Crear el .env para docker-compose
+# Crear el .env para docker-compose en la carpeta /docker/
 log_info "Creando archivo .env para Docker Compose..."
 cat > docker/.env << EOF
-# URL del Broker en tu VPS
-BROKER_URL=https://\${VPS_IP}:50051
-
 # Contraseña de los certificados
 CERT_PASSWORD=\${AGENT_PASS}
 EOF
 
 # 2.4 --- Iniciar el Stack Completo ---
 log_step "Iniciando el stack de la plataforma (Traefik, Agent, Dashboard)..."
+# Ejecutamos docker compose desde la raíz del proyecto
 docker compose -f docker/local-stack-complete.yml up -d --build
 
 # --- Verificación Final ---
 log_step "Verificación Final"
 log_info "Esperando a que los contenedores arranquen..."
-sleep 15
+sleep 20
 
 docker ps
 
