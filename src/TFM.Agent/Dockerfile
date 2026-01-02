@@ -1,24 +1,22 @@
-# --- Etapa 1: Build ---
+# --- Etapa de Build ---
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
-
-# Copia los .csproj primero para cachear la restauración de dependencias
 COPY TFM.Agent/TFM.Agent.csproj TFM.Agent/
 COPY TFM.Contracts/TFM.Contracts.csproj TFM.Contracts/
 RUN dotnet restore TFM.Agent/TFM.Agent.csproj
-
-# Copia todo el código fuente
 COPY . .
-
-# Publica la aplicación
 WORKDIR /src/TFM.Agent
 RUN dotnet publish -c Release -o /app/publish
 
-# --- Etapa 2: Final ---
+# --- Etapa Final ---
 FROM mcr.microsoft.com/dotnet/runtime:8.0 AS final
 WORKDIR /app
-# ... (El resto de tu Dockerfile del Agent con el usuario no-root está bien)
+
+# Crear usuario, copiar archivos y asignar permisos en una sola capa
+RUN groupadd -r agent && useradd -r --gid agent --shell /bin/false agent
 COPY --from=build /app/publish .
-# ...
-USER selfhosting
+RUN chown -R agent:agent /app
+
+USER agent
+
 ENTRYPOINT ["dotnet", "TFM.Agent.dll"]
