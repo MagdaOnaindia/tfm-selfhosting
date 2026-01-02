@@ -85,7 +85,7 @@ fi
 
 # 2.2 --- Ejecutar Playbook de Ansible para crear estructura y configurar ---
 log_info "Ejecutando playbook de Ansible para crear la estructura de directorios y el firewall..."
-ansible-playbook ansible/playbooks/setup-local-system.yml
+ansible-playbook ../ansible/playbooks/setup-local-system.yml
 
 # 2.3 --- Configurar el Agente y Docker Compose ---
 log_info "Configurando el Agente y Docker Compose..."
