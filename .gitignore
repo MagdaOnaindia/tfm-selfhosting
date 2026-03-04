@@ -1,0 +1,32 @@
+# .NET
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+.vs/
+
+# Secrets & Certificates
+*.pfx
+*.key
+docker/broker/.env
+docker/agent/.env
+
+# Local production settings
+/src/TFM.Agent/appsettings.Production.json
+/src/TFM.Broker/appsettings.Production.json
+/src/TFM.Dashboard/appsettings.Production.json
+
+# Certificate files (generate locally with scripts/generate-certs.sh)
+/certs/*.crt
+/certs/*.pfx
+
+# Domain routing (copy from config/domains.example.json)
+config/domains.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log

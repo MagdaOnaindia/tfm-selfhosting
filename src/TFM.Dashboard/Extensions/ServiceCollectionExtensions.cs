@@ -1,0 +1,26 @@
+﻿using TFM.Dashboard.Interfaces;
+using TFM.Dashboard.Services;
+
+namespace TFM.Dashboard.Extensions;
+
+/// <summary>
+/// Extensiones para configurar servicios del Dashboard.
+/// 
+/// </summary>
+public static class ServiceCollectionExtensions
+{
+    /// <summary>
+    /// Registra todos los servicios del Dashboard.
+    /// </summary>
+    public static IServiceCollection AddDashboardServices(this IServiceCollection services)
+    {
+        // Servicios principales (Singleton - estado compartido)
+        services.AddSingleton<IDockerService, DockerService>();
+        services.AddSingleton<IApplicationService, ApplicationService>();
+        services.AddSingleton<ITraefikConfigService, TraefikConfigService>();
+        services.AddSingleton<IAppTemplateService, AppTemplateService>();
+        services.AddSingleton<IGitService, GitService>();
+
+        return services;
+    }
+}

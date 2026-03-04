@@ -1,0 +1,9 @@
+{
+"Routes": {
+"app.tudominio.com": {
+"AgentId": "my-agent",
+"TargetPort": 8080,
+"Description": "Tu aplicación"
+}
+}
+}

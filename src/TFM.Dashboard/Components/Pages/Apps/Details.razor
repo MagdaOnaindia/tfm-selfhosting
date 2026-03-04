@@ -1,0 +1,283 @@
+@page "/apps/{Id}"
+@using MudBlazor
+@using TFM.Dashboard.Models
+@using TFM.Dashboard.Interfaces
+@inject IApplicationService AppService
+@inject IDockerService DockerService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+
+<PageTitle>@(_app?.Name ?? "Aplicación") - SelfHosting</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else if (_app == null)
+{
+    <MudAlert Severity="Severity.Warning" Class="mb-4">
+        No se encontró la aplicación con ID: @Id
+    </MudAlert>
+    <MudButton Variant="Variant.Text" Color="Color.Primary" Href="/apps">
+        Volver a aplicaciones
+    </MudButton>
+}
+else
+{
+    <div class="d-flex justify-space-between align-center mb-4">
+        <div class="d-flex align-center gap-2">
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="/apps" />
+            <MudText Typo="Typo.h4">@_app.Name</MudText>
+            <MudChip Size="Size.Small" T="string"
+                     Color="@GetStatusColor(_app.Status)">
+                @_app.Status
+            </MudChip>
+        </div>
+        <div class="d-flex gap-1">
+            @if (_app.Status == ApplicationStatus.Running)
+            {
+                <MudButton Variant="Variant.Outlined" Color="Color.Warning"
+                           StartIcon="@Icons.Material.Filled.Stop"
+                           OnClick="StopApp">Detener</MudButton>
+            }
+            else
+            {
+                <MudButton Variant="Variant.Outlined" Color="Color.Success"
+                           StartIcon="@Icons.Material.Filled.PlayArrow"
+                           OnClick="StartApp">Iniciar</MudButton>
+            }
+            <MudButton Variant="Variant.Outlined" Color="Color.Info"
+                       StartIcon="@Icons.Material.Filled.Refresh"
+                       OnClick="RestartApp">Reiniciar</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Error"
+                       StartIcon="@Icons.Material.Filled.Delete"
+                       OnClick="DeleteApp">Eliminar</MudButton>
+        </div>
+    </div>
+
+    <MudGrid>
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-4" Elevation="2">
+                <MudText Typo="Typo.h6" Class="mb-3">Información</MudText>
+                <MudSimpleTable Dense="true" Hover="true">
+                    <tbody>
+                        <tr>
+                            <td><strong>Tipo</strong></td>
+                            <td>@_app.Type</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Dominio</strong></td>
+                            <td>
+                                <MudLink Href="@($"https://{_app.Domain}")" Target="_blank">
+                                    @_app.Domain
+                                </MudLink>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Puerto</strong></td>
+                            <td>@_app.Port</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Creado</strong></td>
+                            <td>@_app.CreatedAt.ToString("dd/MM/yyyy HH:mm")</td>
+                        </tr>
+                        @if (_app.LastDeployedAt.HasValue)
+                        {
+                            <tr>
+                                <td><strong>Último despliegue</strong></td>
+                                <td>@_app.LastDeployedAt.Value.ToString("dd/MM/yyyy HH:mm")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-4" Elevation="2">
+                <MudText Typo="Typo.h6" Class="mb-3">Despliegue</MudText>
+                <MudSimpleTable Dense="true" Hover="true">
+                    <tbody>
+                        @if (_app.Source != null)
+                        {
+                            <tr>
+                                <td><strong>Origen</strong></td>
+                                <td>@_app.Source.Type</td>
+                            </tr>
+                        }
+                        @if (!string.IsNullOrEmpty(_app.ComposeFilePath))
+                        {
+                            <tr>
+                                <td><strong>Compose</strong></td>
+                                <td><code style="word-break: break-all;">@_app.ComposeFilePath</code></td>
+                            </tr>
+                        }
+                        @if (!string.IsNullOrEmpty(_app.Version))
+                        {
+                            <tr>
+                                <td><strong>Versión</strong></td>
+                                <td>@_app.Version</td>
+                            </tr>
+                        }
+                        <tr>
+                            <td><strong>Contenedores</strong></td>
+                            <td>@_app.ContainerIds.Count</td>
+                        </tr>
+                    </tbody>
+                </MudSimpleTable>
+            </MudPaper>
+        </MudItem>
+
+        @if (!string.IsNullOrEmpty(_app.Description))
+        {
+            <MudItem xs="12">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="mb-2">Descripción</MudText>
+                    <MudText Typo="Typo.body1">@_app.Description</MudText>
+                </MudPaper>
+            </MudItem>
+        }
+
+        <MudItem xs="12">
+            <MudPaper Class="pa-4" Elevation="2">
+                <div class="d-flex justify-space-between align-center mb-3">
+                    <MudText Typo="Typo.h6">Logs</MudText>
+                    <MudIconButton Icon="@Icons.Material.Filled.Refresh"
+                                   Size="Size.Small"
+                                   OnClick="LoadLogs" />
+                </div>
+                <MudPaper Class="pa-3" Style="background-color: #1e1e1e; color: #d4d4d4; max-height: 500px; overflow-y: auto; font-family: monospace;">
+                    @if (_logs.Any())
+                    {
+                        @foreach (var log in _logs)
+                        {
+                            <div style="font-size: 12px; line-height: 1.4;">@log</div>
+                        }
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2">No hay logs disponibles</MudText>
+                    }
+                </MudPaper>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+
+    private bool _loading = true;
+    private Application? _app;
+    private List<string> _logs = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadApp();
+    }
+
+    private async Task LoadApp()
+    {
+        _loading = true;
+        try
+        {
+            _app = await AppService.GetApplicationAsync(Id);
+            if (_app != null)
+            {
+                await LoadLogs();
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadLogs()
+    {
+        if (_app == null) return;
+        _logs = await AppService.GetApplicationLogsAsync(_app.Id, tail: 200);
+    }
+
+    private async Task StopApp()
+    {
+        try
+        {
+            await AppService.StopApplicationAsync(_app!.Id);
+            Snackbar.Add($"{_app.Name} detenida", Severity.Success);
+            await LoadApp();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task StartApp()
+    {
+        try
+        {
+            await AppService.StartApplicationAsync(_app!.Id);
+            Snackbar.Add($"{_app.Name} iniciada", Severity.Success);
+            await LoadApp();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task RestartApp()
+    {
+        try
+        {
+            await AppService.StopApplicationAsync(_app!.Id);
+            await Task.Delay(1000);
+            await AppService.StartApplicationAsync(_app!.Id);
+            Snackbar.Add($"{_app.Name} reiniciada", Severity.Success);
+            await LoadApp();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task DeleteApp()
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Confirmar eliminación",
+            $"¿Eliminar la aplicación {_app?.Name}? Esta acción no se puede deshacer.",
+            yesText: "Eliminar",
+            cancelText: "Cancelar");
+
+        if (result == true)
+        {
+            try
+            {
+                await AppService.DeleteApplicationAsync(_app!.Id);
+                Snackbar.Add($"{_app.Name} eliminada", Severity.Success);
+                Navigation.NavigateTo("/apps");
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private Color GetStatusColor(ApplicationStatus status)
+    {
+        return status switch
+        {
+            ApplicationStatus.Running => Color.Success,
+            ApplicationStatus.Stopped => Color.Default,
+            ApplicationStatus.Error => Color.Error,
+            ApplicationStatus.Deploying => Color.Info,
+            ApplicationStatus.Starting => Color.Warning,
+            ApplicationStatus.Updating => Color.Info,
+            _ => Color.Default
+        };
+    }
+}

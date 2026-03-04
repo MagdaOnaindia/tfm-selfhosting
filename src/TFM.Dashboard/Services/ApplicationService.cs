@@ -1,0 +1,433 @@
+﻿using System.Net.Http.Json;
+using System.Text.Json;
+using TFM.Dashboard.Interfaces;
+using TFM.Dashboard.Models;
+
+namespace TFM.Dashboard.Services;
+
+/// <summary>
+/// Implementación del servicio de gestión de aplicaciones.
+/// Usa archivo JSON como persistencia.
+/// </summary>
+public class ApplicationService : IApplicationService
+{
+    private readonly string _dataPath;
+    private readonly IDockerService _dockerService;
+    private readonly ITraefikConfigService _traefikService;
+    private readonly ILogger<ApplicationService> _logger;
+    private readonly IConfiguration _configuration;
+    private readonly SemaphoreSlim _lock = new(1, 1);
+
+    public ApplicationService(
+        IConfiguration configuration,
+        IDockerService dockerService,
+        ITraefikConfigService traefikService,
+        ILogger<ApplicationService> logger)
+    {
+        _dockerService = dockerService;
+        _traefikService = traefikService;
+        _logger = logger;
+        _configuration = configuration;
+
+        _dataPath = configuration["Data:AppsPath"]
+            ?? throw new InvalidOperationException("Data:AppsPath not configured");
+
+        var directory = Path.GetDirectoryName(_dataPath);
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+    }
+
+    public async Task<List<Application>> GetApplicationsAsync()
+    {
+        if (!File.Exists(_dataPath))
+        {
+            return new List<Application>();
+        }
+
+        try
+        {
+            var json = await File.ReadAllTextAsync(_dataPath);
+            return JsonSerializer.Deserialize<List<Application>>(json)
+                ?? new List<Application>();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error reading applications from {Path}", _dataPath);
+            return new List<Application>();
+        }
+    }
+
+    public async Task<Application?> GetApplicationAsync(string id)
+    {
+        var apps = await GetApplicationsAsync();
+        return apps.FirstOrDefault(a => a.Id == id);
+    }
+
+    public async Task<Application> CreateApplicationAsync(Application app)
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            var apps = await GetApplicationsAsync();
+
+            app.Id = Guid.NewGuid().ToString();
+            app.CreatedAt = DateTime.UtcNow;
+            app.Status = ApplicationStatus.Stopped;
+
+            apps.Add(app);
+            await SaveApplicationsAsync(apps);
+
+            _logger.LogInformation("Application created: {Name} ({Id})", app.Name, app.Id);
+            return app;
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    public async Task UpdateApplicationAsync(Application app)
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            var apps = await GetApplicationsAsync();
+            var index = apps.FindIndex(a => a.Id == app.Id);
+
+            if (index >= 0)
+            {
+                apps[index] = app;
+                await SaveApplicationsAsync(apps);
+                _logger.LogInformation("Application updated: {Name}", app.Name);
+            }
+            else
+            {
+                _logger.LogWarning("Application not found for update: {Id}", app.Id);
+            }
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    public async Task DeleteApplicationAsync(string id)
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            var apps = await GetApplicationsAsync();
+            var app = apps.FirstOrDefault(a => a.Id == id);
+
+            if (app != null)
+            {
+                foreach (var containerId in app.ContainerIds)
+                {
+                    try
+                    {
+                        await _dockerService.StopContainerAsync(containerId);
+                        await _dockerService.RemoveContainerAsync(containerId);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to remove container {ContainerId}", containerId);
+                    }
+                }
+
+                await _traefikService.RemoveDomainAsync(app.Domain);
+
+                await UnregisterDomainFromBrokerAsync(app);
+
+                if (!string.IsNullOrEmpty(app.ComposeFilePath) && File.Exists(app.ComposeFilePath))
+                {
+                    try
+                    {
+                        await _dockerService.RemoveComposeAsync(
+                            app.ComposeFilePath,
+                            app.Name.ToLowerInvariant().Replace(" ", "-"));
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to remove compose project");
+                    }
+                }
+
+                apps.Remove(app);
+                await SaveApplicationsAsync(apps);
+
+                _logger.LogInformation("Application deleted: {Name}", app.Name);
+            }
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    public async Task<Application> DeployApplicationAsync(Application app)
+    {
+        _logger.LogInformation("Deploying application: {Name}", app.Name);
+
+        app.Status = ApplicationStatus.Deploying;
+        await UpdateApplicationAsync(app);
+
+        try
+        {
+            await _traefikService.AddDomainAsync(new DomainConfiguration
+            {
+                Domain = app.Domain,
+                ServiceName = app.Name.ToLowerInvariant().Replace(" ", "-"),
+                Port = app.Port,
+                EnableHttps = app.EnableHttps
+            });
+
+            await RegisterDomainInBrokerAsync(app);
+
+            if (!string.IsNullOrEmpty(app.ComposeFilePath) && File.Exists(app.ComposeFilePath))
+            {
+                var projectName = app.Name.ToLowerInvariant().Replace(" ", "-");
+                await _dockerService.DeployComposeAsync(app.ComposeFilePath, projectName);
+
+                await Task.Delay(2000);
+
+                await SyncApplicationWithDockerAsync(app);
+            }
+
+            app.Status = ApplicationStatus.Running;
+            app.LastDeployedAt = DateTime.UtcNow;
+            await UpdateApplicationAsync(app);
+
+            _logger.LogInformation("Application deployed successfully: {Name}", app.Name);
+            return app;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, " Application deployment failed: {Name}", app.Name);
+            app.Status = ApplicationStatus.Error;
+            await UpdateApplicationAsync(app);
+            throw;
+        }
+    }
+
+    public async Task StopApplicationAsync(string id)
+    {
+        var app = await GetApplicationAsync(id);
+        if (app == null)
+        {
+            throw new InvalidOperationException($"Application {id} not found");
+        }
+
+        _logger.LogInformation("Stopping application: {Name}", app.Name);
+
+        foreach (var containerId in app.ContainerIds)
+        {
+            try
+            {
+                await _dockerService.StopContainerAsync(containerId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to stop container {ContainerId}", containerId);
+            }
+        }
+
+        app.Status = ApplicationStatus.Stopped;
+        await UpdateApplicationAsync(app);
+    }
+
+    public async Task StartApplicationAsync(string id)
+    {
+        var app = await GetApplicationAsync(id);
+        if (app == null)
+        {
+            throw new InvalidOperationException($"Application {id} not found");
+        }
+
+        _logger.LogInformation(" Starting application: {Name}", app.Name);
+
+        foreach (var containerId in app.ContainerIds)
+        {
+            try
+            {
+                await _dockerService.StartContainerAsync(containerId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to start container {ContainerId}", containerId);
+            }
+        }
+
+        app.Status = ApplicationStatus.Running;
+        await UpdateApplicationAsync(app);
+    }
+
+    public async Task SyncWithDockerAsync()
+    {
+        _logger.LogInformation(" Syncing applications with Docker...");
+
+        var apps = await GetApplicationsAsync();
+        var containers = await _dockerService.GetContainersAsync(all: false);
+
+        foreach (var app in apps)
+        {
+            await SyncApplicationWithDockerAsync(app, containers);
+        }
+
+        await SaveApplicationsAsync(apps);
+        _logger.LogInformation("Sync completed: {Count} applications", apps.Count);
+    }
+
+    public async Task<List<string>> GetApplicationLogsAsync(string id, int tail = 100)
+    {
+        var app = await GetApplicationAsync(id);
+        if (app == null || !app.ContainerIds.Any())
+        {
+            return new List<string>();
+        }
+
+        var allLogs = new List<string>();
+
+        foreach (var containerId in app.ContainerIds)
+        {
+            try
+            {
+                var logs = await _dockerService.GetContainerLogsAsync(containerId, tail);
+                allLogs.Add($"=== Logs from {containerId} ===");
+                allLogs.AddRange(logs);
+                allLogs.Add("");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to get logs for container {ContainerId}", containerId);
+            }
+        }
+
+        return allLogs;
+    }
+
+    private async Task SyncApplicationWithDockerAsync(
+        Application app,
+        List<DockerContainer>? containers = null)
+    {
+        containers ??= await _dockerService.GetContainersAsync(all: false);
+
+        var projectName = app.Name.ToLowerInvariant().Replace(" ", "-");
+
+        var appContainers = containers.Where(c =>
+            c.Labels.GetValueOrDefault("com.docker.compose.project") == projectName ||
+            c.Labels.GetValueOrDefault("app.id") == app.Id ||
+            c.Name.StartsWith(projectName, StringComparison.OrdinalIgnoreCase)
+        ).ToList();
+
+        if (appContainers.Any())
+        {
+            app.ContainerIds = appContainers.Select(c => c.Id).ToList();
+            app.Status = appContainers.All(c => c.State == "running")
+                ? ApplicationStatus.Running
+                : ApplicationStatus.Stopped;
+        }
+        else
+        {
+            app.Status = ApplicationStatus.Stopped;
+            app.ContainerIds.Clear();
+        }
+    }
+
+    private async Task RegisterDomainInBrokerAsync(Application app)
+    {
+        var brokerUrl = _configuration["Broker:AdminUrl"];
+        var apiKey = _configuration["Broker:ApiKey"];
+        var agentId = _configuration["Broker:AgentId"] ?? "my-agent";
+
+        if (string.IsNullOrEmpty(brokerUrl) || string.IsNullOrEmpty(apiKey))
+        {
+            _logger.LogWarning(
+                "Broker:AdminUrl or Broker:ApiKey not configured — skipping automatic domain registration for {Domain}. Add the route to domains.json manually.",
+                app.Domain);
+            return;
+        }
+
+        try
+        {
+            using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            httpClient.DefaultRequestHeaders.Add("X-API-Key", apiKey);
+
+            var payload = new
+            {
+                domain = app.Domain,
+                agentId,
+                targetPort = app.Port,
+                description = app.Name
+            };
+
+            var response = await httpClient.PostAsJsonAsync($"{brokerUrl}/admin/routes", payload);
+
+            if (response.IsSuccessStatusCode)
+            {
+                _logger.LogInformation(
+                    "Domain registered in Broker: {Domain} -> {AgentId}:{Port}",
+                    app.Domain, agentId, app.Port);
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                _logger.LogWarning(
+                    "Failed to register domain in Broker (HTTP {Status}): {Error}. Add the route to domains.json manually.",
+                    response.StatusCode, error);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Could not reach Broker to register domain {Domain}. Add the route to domains.json manually.",
+                app.Domain);
+        }
+    }
+
+    private async Task UnregisterDomainFromBrokerAsync(Application app)
+    {
+        var brokerUrl = _configuration["Broker:AdminUrl"];
+        var apiKey = _configuration["Broker:ApiKey"];
+
+        if (string.IsNullOrEmpty(brokerUrl) || string.IsNullOrEmpty(apiKey))
+        {
+            return;
+        }
+
+        try
+        {
+            using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            httpClient.DefaultRequestHeaders.Add("X-API-Key", apiKey);
+
+            var response = await httpClient.DeleteAsync(
+                $"{brokerUrl}/admin/routes/{Uri.EscapeDataString(app.Domain)}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                _logger.LogInformation("Domain removed from Broker: {Domain}", app.Domain);
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "Failed to remove domain from Broker (HTTP {Status})", response.StatusCode);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Could not reach Broker to remove domain {Domain}", app.Domain);
+        }
+    }
+
+    private async Task SaveApplicationsAsync(List<Application> apps)
+    {
+        var json = JsonSerializer.Serialize(apps, new JsonSerializerOptions
+        {
+            WriteIndented = true
+        });
+
+        await File.WriteAllTextAsync(_dataPath, json);
+    }
+}

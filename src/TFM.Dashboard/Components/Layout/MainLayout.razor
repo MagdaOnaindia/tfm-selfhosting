@@ -1,0 +1,74 @@
+﻿@using MudBlazor
+@inherits LayoutComponentBase
+
+
+<MudThemeProvider Theme="_theme" />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="1">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" 
+                       Color="Color.Inherit" 
+                       Edge="Edge.Start" 
+                       OnClick="@DrawerToggle" />
+        <MudText Typo="Typo.h5" Class="ml-3">SelfHosting Dashboard</MudText>
+        <MudSpacer />
+        <MudText Typo="Typo.body2" Class="mr-4">
+            <MudIcon Icon="@Icons.Material.Filled.Circle" 
+                     Color="@(_systemHealthy ? Color.Success : Color.Error)" 
+                     Size="Size.Small" />
+            @(_systemHealthy ? "Sistema Operativo" : "Sistema con Problemas")
+        </MudText>
+        <MudIconButton Icon="@Icons.Material.Filled.Refresh" 
+                       Color="Color.Inherit" 
+                       OnClick="RefreshStatus" />
+    </MudAppBar>
+    
+    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2">
+        <MudDrawerHeader>
+            <MudText Typo="Typo.h6">Menú</MudText>
+        </MudDrawerHeader>
+        <NavMenu />
+    </MudDrawer>
+    
+    <MudMainContent Class="mt-16 pa-4">
+        <MudContainer MaxWidth="MaxWidth.ExtraExtraLarge">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private bool _drawerOpen = true;
+    private bool _systemHealthy = true;
+    
+    private MudTheme _theme = new()
+    {
+            PaletteLight = new PaletteLight()
+            {
+                Primary = "#0D47A1",         
+                Secondary = "#FF6F00",       
+                AppbarBackground = "#0D47A1",
+                Success = "#2E7D32",         
+                Error = "#C62828",           
+            },
+            PaletteDark = new PaletteDark() 
+            {
+                Primary = "#42A5F5",
+                Secondary = "#FFA726",
+                AppbarBackground = "#1E1E1E"
+            }
+    };
+
+    private void DrawerToggle()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    private void RefreshStatus()
+    {
+        // TODO: Implementar verificación real del sistema
+        StateHasChanged();
+    }
+}

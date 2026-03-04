@@ -1,0 +1,42 @@
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: selfhosting-caddy
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: ["vps-network"]
+    depends_on: ["broker"]
+
+  broker:
+    build:
+      context: ..
+      dockerfile: docker/broker/Dockerfile
+    container_name: tfm-broker
+    restart: unless-stopped
+    ports: ["127.0.0.1:5000:5000", "50051:50051"]
+    volumes:
+      - ../certs:/app/certs:ro
+      - ../config:/app/config
+      - ./broker/logs:/app/logs
+    env_file:
+      - ./broker/.env
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:5000
+    networks: ["vps-network"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      start_period: 20s
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  vps-network:
+    driver: bridge

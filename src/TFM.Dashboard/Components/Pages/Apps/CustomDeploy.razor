@@ -1,0 +1,417 @@
+@page "/deploy/custom"
+@using MudBlazor
+@using TFM.Dashboard.Models
+@using TFM.Dashboard.Interfaces
+@inject IAppTemplateService TemplateService
+@inject IApplicationService AppService
+@inject IConfiguration Configuration
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Desplegar App Personalizada - SelfHosting</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-2">Desplegar App Personalizada</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+    Despliega cualquier imagen Docker o tu propio archivo Docker Compose.
+</MudText>
+
+<MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6" @bind-ActivePanelIndex="_activeTab">
+
+    @* ===== TAB 1: Docker Image ===== *@
+    <MudTabPanel Text="Imagen Docker" Icon="@Icons.Material.Filled.Image">
+
+        <MudGrid>
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="_imageName"
+                              Label="Imagen Docker"
+                              Required="true"
+                              Variant="Variant.Outlined"
+                              Placeholder="nginx:latest"
+                              HelperText="Nombre de la imagen del registro Docker (ej: redis:7, ghost:5, postgres:16)" />
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="_appName"
+                              Label="Nombre de la aplicacion"
+                              Required="true"
+                              Variant="Variant.Outlined"
+                              Placeholder="mi-app"
+                              HelperText="Identificador unico para la aplicacion" />
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="_appDomain"
+                              Label="Dominio"
+                              Required="true"
+                              Variant="Variant.Outlined"
+                              Placeholder="app.ejemplo.com"
+                              HelperText="Dominio completo (debe apuntar a tu VPS)" />
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudNumericField @bind-Value="_port"
+                                 Label="Puerto interno del contenedor"
+                                 Variant="Variant.Outlined"
+                                 Min="1" Max="65535"
+                                 HelperText="Puerto en el que escucha la aplicacion dentro del contenedor" />
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_appDescription"
+                              Label="Descripcion (opcional)"
+                              Variant="Variant.Outlined"
+                              Lines="2" />
+            </MudItem>
+        </MudGrid>
+
+        @* Environment Variables *@
+        <MudDivider Class="my-4" />
+        <div class="d-flex align-center mb-3">
+            <MudText Typo="Typo.h6">Variables de Entorno</MudText>
+            <MudSpacer />
+            <MudButton Variant="Variant.Outlined"
+                       Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="AddEnvVar">
+                Agregar Variable
+            </MudButton>
+        </div>
+
+        @if (_customEnvVars.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                No hay variables de entorno configuradas. Algunas imagenes requieren variables como contraseñas o configuracion.
+            </MudText>
+        }
+
+        @for (var i = 0; i < _customEnvVars.Count; i++)
+        {
+            var index = i;
+            <MudGrid Class="mb-2">
+                <MudItem xs="5">
+                    <MudTextField @bind-Value="_customEnvVars[index].Key"
+                                  Label="Nombre"
+                                  Variant="Variant.Outlined"
+                                  Placeholder="VARIABLE_NAME"
+                                  Margin="Margin.Dense" />
+                </MudItem>
+                <MudItem xs="5">
+                    <MudTextField @bind-Value="_customEnvVars[index].Value"
+                                  Label="Valor"
+                                  Variant="Variant.Outlined"
+                                  Placeholder="valor"
+                                  Margin="Margin.Dense" />
+                </MudItem>
+                <MudItem xs="2" Class="d-flex align-center">
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                   Color="Color.Error"
+                                   Size="Size.Small"
+                                   OnClick="@(() => RemoveEnvVar(index))" />
+                </MudItem>
+            </MudGrid>
+        }
+
+        <div class="d-flex justify-end mt-6">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Success"
+                       Disabled="@(!IsImageModeValid() || _deploying)"
+                       StartIcon="@Icons.Material.Filled.RocketLaunch"
+                       OnClick="DeployDockerImage">
+                @(_deploying ? "Desplegando..." : "Desplegar Imagen")
+            </MudButton>
+        </div>
+
+    </MudTabPanel>
+
+    @* ===== TAB 2: Docker Compose ===== *@
+    <MudTabPanel Text="Docker Compose" Icon="@Icons.Material.Filled.Description">
+
+        <MudAlert Severity="Severity.Info" Class="mb-4">
+            Pega tu archivo <code>docker-compose.yml</code> completo. Asegurate de:
+            <ul class="mt-1 mb-0">
+                <li>Usar la red <code>traefik-net</code> (external: true) para que el proxy pueda enrutar trafico</li>
+                <li>Incluir labels de Traefik en el servicio principal para el enrutamiento automatico</li>
+                <li>Usar <code>restart: unless-stopped</code> para que los contenedores se reinicien automaticamente</li>
+            </ul>
+        </MudAlert>
+
+        <MudGrid>
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="_appName"
+                              Label="Nombre de la aplicacion"
+                              Required="true"
+                              Variant="Variant.Outlined"
+                              Placeholder="mi-app"
+                              HelperText="Identificador unico para la aplicacion" />
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="_appDomain"
+                              Label="Dominio"
+                              Required="true"
+                              Variant="Variant.Outlined"
+                              Placeholder="app.ejemplo.com"
+                              HelperText="Dominio completo (debe apuntar a tu VPS)" />
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_appDescription"
+                              Label="Descripcion (opcional)"
+                              Variant="Variant.Outlined"
+                              Lines="2" />
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_composeContent"
+                              Label="Contenido docker-compose.yml"
+                              Required="true"
+                              Variant="Variant.Outlined"
+                              Lines="18"
+                              Style="font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 13px;"
+                              Placeholder="version: '3.8'&#10;&#10;services:&#10;  mi-servicio:&#10;    image: mi-imagen:latest&#10;    ..." />
+            </MudItem>
+        </MudGrid>
+
+        <div class="d-flex justify-end mt-4">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Success"
+                       Disabled="@(!IsComposeModeValid() || _deploying)"
+                       StartIcon="@Icons.Material.Filled.RocketLaunch"
+                       OnClick="DeployCompose">
+                @(_deploying ? "Desplegando..." : "Desplegar Compose")
+            </MudButton>
+        </div>
+
+    </MudTabPanel>
+
+</MudTabs>
+
+@* ===== Deployment Log ===== *@
+@if (_deploying || !string.IsNullOrEmpty(_deploymentLog))
+{
+    <MudPaper Class="pa-4 mt-4" Elevation="2">
+        <MudText Typo="Typo.h6" Class="mb-2">Log de Despliegue</MudText>
+
+        @if (_deploying)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-2" />
+        }
+
+        <MudPaper Class="pa-3" Style="background-color: #1e1e1e; color: #d4d4d4; max-height: 300px; overflow-y: auto;">
+            <pre style="margin: 0; font-size: 12px; white-space: pre-wrap;">@_deploymentLog</pre>
+        </MudPaper>
+
+        @if (_deploymentError != null)
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-3">
+                <strong>Error:</strong> @_deploymentError
+            </MudAlert>
+        }
+    </MudPaper>
+}
+
+@code {
+    private int _activeTab = 0;
+
+    // Shared fields
+    private string _appName = "";
+    private string _appDomain = "";
+    private string _appDescription = "";
+
+    // Docker Image mode
+    private string _imageName = "";
+    private int _port = 80;
+    private List<EnvVarEntry> _customEnvVars = new();
+
+    // Compose mode
+    private string _composeContent = "";
+
+    // Deployment state
+    private bool _deploying = false;
+    private string? _deploymentError = null;
+    private string _deploymentLog = "";
+
+    private class EnvVarEntry
+    {
+        public string Key { get; set; } = "";
+        public string Value { get; set; } = "";
+    }
+
+    private void AddEnvVar()
+    {
+        _customEnvVars.Add(new EnvVarEntry());
+    }
+
+    private void RemoveEnvVar(int index)
+    {
+        if (index >= 0 && index < _customEnvVars.Count)
+            _customEnvVars.RemoveAt(index);
+    }
+
+    private bool IsImageModeValid()
+    {
+        return !string.IsNullOrWhiteSpace(_appName)
+            && !string.IsNullOrWhiteSpace(_appDomain)
+            && !string.IsNullOrWhiteSpace(_imageName)
+            && _port > 0 && _port <= 65535;
+    }
+
+    private bool IsComposeModeValid()
+    {
+        return !string.IsNullOrWhiteSpace(_appName)
+            && !string.IsNullOrWhiteSpace(_appDomain)
+            && !string.IsNullOrWhiteSpace(_composeContent);
+    }
+
+    private async Task DeployDockerImage()
+    {
+        _deploying = true;
+        _deploymentError = null;
+        _deploymentLog = "Iniciando despliegue de imagen Docker...\n";
+
+        try
+        {
+            _appDomain = _appDomain.Trim();
+            _appName = _appName.Trim();
+            var serviceName = _appName.ToLowerInvariant().Replace(" ", "-");
+            var basePath = Configuration["System:AppsDataPath"] ?? "/opt/selfhosting/apps";
+            var dataPath = Path.Combine(basePath, serviceName);
+
+            _deploymentLog += $"Servicio: {serviceName}\n";
+            _deploymentLog += $"Imagen: {_imageName}\n";
+            _deploymentLog += $"Dominio: {_appDomain}\n";
+            _deploymentLog += $"Puerto: {_port}\n";
+            _deploymentLog += $"Creando directorio: {dataPath}\n";
+            Directory.CreateDirectory(dataPath);
+
+            // Build env vars dictionary
+            var envVars = new Dictionary<string, string>();
+            foreach (var ev in _customEnvVars.Where(e => !string.IsNullOrWhiteSpace(e.Key)))
+            {
+                envVars[ev.Key] = ev.Value;
+            }
+
+            _deploymentLog += "Generando docker-compose.yml...\n";
+            StateHasChanged();
+
+            var composeContent = await TemplateService.GenerateCustomComposeAsync(
+                _imageName, serviceName, _appDomain, _port, dataPath, envVars);
+
+            var composePath = Path.Combine(dataPath, "docker-compose.yml");
+            await File.WriteAllTextAsync(composePath, composeContent);
+            _deploymentLog += $"Docker Compose guardado en: {composePath}\n";
+
+            // Create application record
+            _deploymentLog += "Creando registro de aplicacion...\n";
+            var app = new Application
+            {
+                Name = _appName,
+                Type = "custom",
+                Domain = _appDomain,
+                Description = _appDescription,
+                ComposeFilePath = composePath,
+                Port = _port,
+                Environment = envVars,
+                Source = new DeploymentSource
+                {
+                    Type = DeploymentType.DockerImage,
+                    DockerImage = _imageName
+                }
+            };
+
+            app = await AppService.CreateApplicationAsync(app);
+            _deploymentLog += $"Aplicacion creada con ID: {app.Id}\n";
+
+            _deploymentLog += "Ejecutando docker compose up...\n";
+            StateHasChanged();
+
+            await AppService.DeployApplicationAsync(app);
+
+            _deploymentLog += "Despliegue completado exitosamente!\n";
+            Snackbar.Add($"{_appName} desplegado correctamente", Severity.Success);
+
+            await Task.Delay(2000);
+            Navigation.NavigateTo($"/apps/{app.Id}");
+        }
+        catch (Exception ex)
+        {
+            _deploymentError = ex.Message;
+            _deploymentLog += $"\nERROR: {ex.Message}\n";
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _deploying = false;
+        }
+    }
+
+    private async Task DeployCompose()
+    {
+        _deploying = true;
+        _deploymentError = null;
+        _deploymentLog = "Iniciando despliegue con Docker Compose personalizado...\n";
+
+        try
+        {
+            _appDomain = _appDomain.Trim();
+            _appName = _appName.Trim();
+            var serviceName = _appName.ToLowerInvariant().Replace(" ", "-");
+            var basePath = Configuration["System:AppsDataPath"] ?? "/opt/selfhosting/apps";
+            var dataPath = Path.Combine(basePath, serviceName);
+
+            _deploymentLog += $"Servicio: {serviceName}\n";
+            _deploymentLog += $"Dominio: {_appDomain}\n";
+            _deploymentLog += $"Creando directorio: {dataPath}\n";
+            Directory.CreateDirectory(dataPath);
+
+            var composePath = Path.Combine(dataPath, "docker-compose.yml");
+            await File.WriteAllTextAsync(composePath, _composeContent);
+            _deploymentLog += $"Docker Compose guardado en: {composePath}\n";
+
+            _deploymentLog += "Creando registro de aplicacion...\n";
+            var app = new Application
+            {
+                Name = _appName,
+                Type = "custom-compose",
+                Domain = _appDomain,
+                Description = _appDescription,
+                ComposeFilePath = composePath,
+                Port = 80,
+                Source = new DeploymentSource
+                {
+                    Type = DeploymentType.DockerCompose
+                }
+            };
+
+            app = await AppService.CreateApplicationAsync(app);
+            _deploymentLog += $"Aplicacion creada con ID: {app.Id}\n";
+
+            _deploymentLog += "Ejecutando docker compose up...\n";
+            StateHasChanged();
+
+            await AppService.DeployApplicationAsync(app);
+
+            _deploymentLog += "Despliegue completado exitosamente!\n";
+            Snackbar.Add($"{_appName} desplegado correctamente", Severity.Success);
+
+            await Task.Delay(2000);
+            Navigation.NavigateTo($"/apps/{app.Id}");
+        }
+        catch (Exception ex)
+        {
+            _deploymentError = ex.Message;
+            _deploymentLog += $"\nERROR: {ex.Message}\n";
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _deploying = false;
+        }
+    }
+}
+
+<style>
+    .mud-tabs-panels {
+        min-height: 400px;
+    }
+</style>

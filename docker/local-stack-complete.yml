@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  # --- Traefik: Reverse Proxy Local ---
+  traefik:
+    image: traefik:v2.10
+    container_name: selfhosting-traefik
+    restart: unless-stopped
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=traefik-net"
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--providers.file.watch=true"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /opt/selfhosting/traefik/dynamic:/etc/traefik/dynamic
+    networks:
+      - selfhosting-net
+      - traefik-net
+
+  # --- Agent: El cliente que conecta con el Broker ---
+  agent:
+    build:
+      context: ../src # El contexto es la carpeta del proyecto del Agente
+      dockerfile: TFM.Agent/Dockerfile     # El Dockerfile está DENTRO de esa carpeta de contexto
+    container_name: selfhosting-agent
+    restart: unless-stopped
+    volumes:
+      - /opt/selfhosting/certs:/opt/selfhosting/certs:ro
+      - /opt/selfhosting/config/appsettings.Production.json:/app/appsettings.Production.json:ro
+    environment:
+      - DOTNET_ENVIRONMENT=Production
+      - AGENT_CERT_PASSWORD=${AGENT_CERT_PASSWORD}
+    networks:
+      - selfhosting-net
+    depends_on:
+      - traefik
+
+  # --- Dashboard: La interfaz web de gestión ---
+  dashboard:
+    build:
+      context: ../src  # <-- La carpeta 'src'
+      dockerfile: TFM.Dashboard/Dockerfile # <-- Ruta al Dockerfile DESDE 'src'
+    container_name: selfhosting-dashboard
+    restart: unless-stopped
+    ports:
+      - "5500:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /opt/selfhosting:/opt/selfhosting
+    environment:
+      - DOTNET_ENVIRONMENT=Production
+      - Broker__AdminUrl=${BROKER_ADMIN_URL:-https://api.magdaselfhosting.com}
+      - Broker__ApiKey=${ADMIN_API_KEY}
+      - Broker__AgentId=${AGENT_ID:-my-agent}
+    group_add:
+      - "${DOCKER_GID:-999}"
+    networks:
+      - selfhosting-net
+      - traefik-net
+
+networks:
+  selfhosting-net:
+    driver: bridge
+  traefik-net:
+    external: true

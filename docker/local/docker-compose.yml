@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+    agent:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        container_name: selfhosting-agent
+        restart: unless-stopped
+
+        environment:
+            - DOTNET_ENVIRONMENT=Production
+            - AGENT_CERT_PASSWORD=${AGENT_CERT_PASSWORD} # Desde .env
+
+        volumes:
+            - /opt/selfhosting/certs:/opt/selfhosting/certs:ro
+            - ./logs:/app/logs
+
+        networks:
+            - agent-network
+
+        # Seguridad del contenedor
+        security_opt:
+            - no-new-privileges:true
+        cap_drop:
+            - ALL
+        read_only: true
+        tmpfs:
+            - /tmp:noexec,nosuid,size=50M
+
+networks:
+    agent-network:
+        driver: bridge

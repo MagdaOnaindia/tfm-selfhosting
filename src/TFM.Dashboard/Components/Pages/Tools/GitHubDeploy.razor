@@ -1,0 +1,354 @@
+@page "/tools/github"
+@using MudBlazor
+@using TFM.Dashboard.Interfaces
+@using TFM.Dashboard.Models
+@inject IGitService GitService
+@inject IDockerService DockerService
+@inject IApplicationService AppService
+@inject IAppTemplateService TemplateService
+@inject IConfiguration Configuration
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>GitHub Deployment - SelfHosting</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-2">Deployment desde GitHub</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+    Clona un repositorio Git y despliega automaticamente con Docker Compose o Dockerfile.
+</MudText>
+
+<MudPaper Class="pa-4" Elevation="2">
+
+    <MudGrid>
+        <MudItem xs="12">
+            <MudTextField @bind-Value="_gitUrl"
+                          Label="URL del Repositorio"
+                          Placeholder="https://github.com/usuario/repo.git"
+                          Variant="Variant.Outlined"
+                          HelperText="URL HTTPS del repositorio (GitHub, GitLab, Bitbucket)"
+                          Required="true"
+                          Validation="@(new Func<string, string?>(ValidateGitUrl))" />
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudTextField @bind-Value="_branch"
+                          Label="Rama"
+                          Placeholder="main"
+                          Variant="Variant.Outlined"
+                          Required="true" />
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudTextField @bind-Value="_appName"
+                          Label="Nombre de la Aplicacion"
+                          Variant="Variant.Outlined"
+                          Required="true" />
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudTextField @bind-Value="_domain"
+                          Label="Dominio"
+                          Placeholder="app.ejemplo.com"
+                          Variant="Variant.Outlined"
+                          Required="true" />
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudNumericField @bind-Value="_port"
+                             Label="Puerto interno del contenedor"
+                             Variant="Variant.Outlined"
+                             Min="1" Max="65535"
+                             HelperText="Puerto en el que escucha la app dentro del contenedor" />
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudDivider />
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudText Typo="Typo.subtitle1" Class="mb-2"><strong>Credenciales (solo repos privados)</strong></MudText>
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">
+                Para repositorios privados, usa un Personal Access Token.
+                Las credenciales solo se usan para clonar y no se almacenan.
+            </MudAlert>
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudTextField @bind-Value="_githubUsername"
+                          Label="Usuario (opcional)"
+                          Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudTextField @bind-Value="_githubToken"
+                          Label="Personal Access Token (opcional)"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Password" />
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudDivider />
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudText Typo="Typo.subtitle1" Class="mb-2"><strong>Tipo de Deployment</strong></MudText>
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudRadioGroup @bind-Value="_deploymentType" T="string">
+                <MudRadio Option="@("docker-compose")" Color="Color.Primary" T="string">
+                    <strong>Docker Compose</strong> - El repo contiene docker-compose.yml
+                </MudRadio>
+                <MudRadio Option="@("dockerfile")" Color="Color.Primary" T="string">
+                    <strong>Dockerfile</strong> - El repo contiene un Dockerfile (se genera compose automaticamente)
+                </MudRadio>
+            </MudRadioGroup>
+        </MudItem>
+
+        @if (_deploymentType == "dockerfile")
+        {
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_dockerfilePath"
+                              Label="Ruta al Dockerfile (relativa al repo)"
+                              Placeholder="Dockerfile"
+                              Variant="Variant.Outlined"
+                              HelperText="Ruta relativa dentro del repositorio (por defecto: Dockerfile)" />
+            </MudItem>
+        }
+    </MudGrid>
+
+    <div class="d-flex justify-end mt-4">
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.CloudUpload"
+                   Disabled="_deploying || !IsFormValid()"
+                   OnClick="DeployFromGitHub">
+            @(_deploying ? "Desplegando..." : "Desplegar desde Git")
+        </MudButton>
+    </div>
+</MudPaper>
+
+@* ===== Deployment Log ===== *@
+@if (_deploying || !string.IsNullOrEmpty(_deploymentOutput))
+{
+    <MudPaper Class="pa-4 mt-4" Elevation="2">
+        <MudText Typo="Typo.h6" Class="mb-2">Log de Despliegue</MudText>
+
+        @if (_deploying)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-2" />
+        }
+
+        <MudPaper Class="pa-3" Style="background-color: #1e1e1e; color: #d4d4d4; max-height: 400px; overflow-y: auto;">
+            <pre style="margin: 0; white-space: pre-wrap; font-size: 12px;">@_deploymentOutput</pre>
+        </MudPaper>
+
+        @if (_deploymentError != null)
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-3">
+                <strong>Error:</strong> @_deploymentError
+            </MudAlert>
+        }
+    </MudPaper>
+}
+
+@code {
+    private string _gitUrl = "";
+    private string _branch = "main";
+    private string _appName = "";
+    private string _domain = "";
+    private string _githubUsername = "";
+    private string _githubToken = "";
+    private string _deploymentType = "docker-compose";
+    private string _dockerfilePath = "Dockerfile";
+    private int _port = 80;
+
+    private bool _deploying = false;
+    private string _deploymentOutput = "";
+    private string? _deploymentError = null;
+
+    private string? ValidateGitUrl(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            return "URL requerida";
+
+        if (!GitService.IsValidRepositoryUrl(url))
+            return "URL de repositorio no valida";
+
+        return null;
+    }
+
+    private bool IsFormValid()
+    {
+        return !string.IsNullOrWhiteSpace(_gitUrl) &&
+               !string.IsNullOrWhiteSpace(_branch) &&
+               !string.IsNullOrWhiteSpace(_appName) &&
+               !string.IsNullOrWhiteSpace(_domain) &&
+               _port > 0 && _port <= 65535 &&
+               GitService.IsValidRepositoryUrl(_gitUrl);
+    }
+
+    private async Task DeployFromGitHub()
+    {
+        _deploying = true;
+        _deploymentOutput = "";
+        _deploymentError = null;
+
+        try
+        {
+            _appName = _appName.Trim();
+            _domain = _domain.Trim();
+            var serviceName = _appName.ToLowerInvariant().Replace(" ", "-");
+            var basePath = Configuration["System:AppsDataPath"] ?? "/opt/selfhosting/apps";
+            var appDir = Path.Combine(basePath, serviceName);
+            var sourcePath = Path.Combine(appDir, "source");
+
+            _deploymentOutput += "Iniciando deployment desde GitHub...\n";
+            _deploymentOutput += $"Repositorio: {_gitUrl}\n";
+            _deploymentOutput += $"Rama: {_branch}\n";
+            _deploymentOutput += $"Servicio: {serviceName}\n";
+            _deploymentOutput += $"Dominio: {_domain}\n\n";
+            StateHasChanged();
+
+            // 1. Create app directory
+            Directory.CreateDirectory(appDir);
+            _deploymentOutput += $"Directorio creado: {appDir}\n";
+
+            // Clean up previous clone if exists
+            if (Directory.Exists(sourcePath))
+            {
+                _deploymentOutput += "Limpiando directorio anterior...\n";
+                StateHasChanged();
+                DeleteDirectoryRecursive(sourcePath);
+            }
+
+            // 2. Clone repository
+            _deploymentOutput += "Clonando repositorio...\n";
+            StateHasChanged();
+
+            string? username = string.IsNullOrWhiteSpace(_githubUsername) ? null : _githubUsername;
+            string? token = string.IsNullOrWhiteSpace(_githubToken) ? null : _githubToken;
+
+            await GitService.CloneRepositoryAsync(
+                _gitUrl, sourcePath, username, token, _branch);
+
+            _deploymentOutput += "Repositorio clonado correctamente.\n\n";
+
+            // Clear credentials from memory
+            _githubUsername = "";
+            _githubToken = "";
+
+            string composePath;
+
+            if (_deploymentType == "docker-compose")
+            {
+                // 3a. Use existing docker-compose.yml from repo
+                var repoComposePath = Path.Combine(sourcePath, "docker-compose.yml");
+                if (!File.Exists(repoComposePath))
+                {
+                    // Try docker-compose.yaml
+                    repoComposePath = Path.Combine(sourcePath, "docker-compose.yaml");
+                }
+                if (!File.Exists(repoComposePath))
+                {
+                    // Try compose.yml
+                    repoComposePath = Path.Combine(sourcePath, "compose.yml");
+                }
+                if (!File.Exists(repoComposePath))
+                {
+                    repoComposePath = Path.Combine(sourcePath, "compose.yaml");
+                }
+
+                if (!File.Exists(repoComposePath))
+                {
+                    throw new InvalidOperationException(
+                        "No se encontro docker-compose.yml, docker-compose.yaml, compose.yml ni compose.yaml en el repositorio.");
+                }
+
+                composePath = repoComposePath;
+                _deploymentOutput += $"Docker Compose encontrado: {Path.GetFileName(composePath)}\n";
+            }
+            else
+            {
+                // 3b. Dockerfile mode: build image, then generate compose
+                var dockerfile = string.IsNullOrWhiteSpace(_dockerfilePath) ? "Dockerfile" : _dockerfilePath;
+                var fullDockerfilePath = Path.Combine(sourcePath, dockerfile);
+
+                if (!File.Exists(fullDockerfilePath))
+                {
+                    throw new InvalidOperationException($"No se encontro Dockerfile en: {dockerfile}");
+                }
+
+                _deploymentOutput += $"Construyendo imagen Docker desde {dockerfile}...\n";
+                StateHasChanged();
+
+                await DockerService.BuildImageAsync(sourcePath, serviceName, dockerfile);
+                _deploymentOutput += $"Imagen construida: {serviceName}\n";
+
+                // Generate a docker-compose.yml that uses the built image
+                _deploymentOutput += "Generando docker-compose.yml...\n";
+                var composeContent = await TemplateService.GenerateCustomComposeAsync(
+                    serviceName, serviceName, _domain, _port, appDir);
+
+                composePath = Path.Combine(appDir, "docker-compose.yml");
+                await File.WriteAllTextAsync(composePath, composeContent);
+                _deploymentOutput += $"Docker Compose generado: {composePath}\n";
+            }
+
+            StateHasChanged();
+
+            // 4. Create application record
+            _deploymentOutput += "\nCreando registro de aplicacion...\n";
+            var app = new Application
+            {
+                Name = _appName,
+                Type = "github",
+                Domain = _domain,
+                Description = $"Deployed from {_gitUrl} ({_branch})",
+                ComposeFilePath = composePath,
+                Port = _port,
+                Source = new DeploymentSource
+                {
+                    Type = DeploymentType.GitHub,
+                    GitUrl = _gitUrl,
+                    GitBranch = _branch
+                }
+            };
+
+            app = await AppService.CreateApplicationAsync(app);
+            _deploymentOutput += $"Aplicacion creada con ID: {app.Id}\n";
+
+            // 5. Deploy
+            _deploymentOutput += "Ejecutando docker compose up...\n";
+            StateHasChanged();
+
+            await AppService.DeployApplicationAsync(app);
+
+            _deploymentOutput += "\nDespliegue completado exitosamente!\n";
+            Snackbar.Add($"{_appName} desplegado correctamente", Severity.Success);
+
+            await Task.Delay(2000);
+            Navigation.NavigateTo($"/apps/{app.Id}");
+        }
+        catch (Exception ex)
+        {
+            _deploymentError = ex.Message;
+            _deploymentOutput += $"\nERROR: {ex.Message}\n";
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _deploying = false;
+        }
+    }
+
+    private static void DeleteDirectoryRecursive(string path)
+    {
+        // LibGit2Sharp creates read-only files; need to clear attributes before deleting
+        foreach (var file in Directory.GetFiles(path, "*", SearchOption.AllDirectories))
+        {
+            File.SetAttributes(file, FileAttributes.Normal);
+        }
+        Directory.Delete(path, true);
+    }
+}
